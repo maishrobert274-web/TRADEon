@@ -1,1 +1,50 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEon Trading</title><style>*{box-sizing:border-box}body{margin:0;font-family:Arial;background:#f5f7fb;color:#172033}header{background:#101828;color:white;padding:18px 20px;display:flex;justify-content:space-between}.wrap{max-width:700px;margin:auto;padding:20px}.card{background:white;border-radius:18px;padding:20px;margin-bottom:15px;box-shadow:0 5px 20px #0001}.price{font-size:32px;font-weight:800;margin:10px 0}.muted{color:#667085}.actions{display:grid;grid-template-columns:1fr 1fr;gap:12px}button,a{padding:15px;border:0;border-radius:11px;font-weight:700;text-align:center;text-decoration:none;font-size:16px}.buy{background:#12b76a;color:white}.sell{background:#d92d20;color:white}.back{display:block;background:#eef2f6;color:#172033;margin-top:12px}@media(max-width:500px){.actions{grid-template-columns:1fr}}</style></head><body><header><b>TRADEon</b><span>🇰🇪 KSh</span></header><div class="wrap"><div class="card"><div class="muted">Demo market</div><h1>BTC / USDT</h1><div class="price">$100,000.00</div><div class="muted">Practice trading only — no real money is used.</div></div><div class="card"><h2>Place a demo trade</h2><p class="muted">Choose an action to practice.</p><div class="actions"><button class="buy" onclick="alert('Demo BUY order placed.')">BUY</button><button class="sell" onclick="alert('Demo SELL order placed.')">SELL</button></div><a class="back" href="/">Back to dashboard</a></div></div></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TRADEon — Trade</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#090b0d;color:#fff;font-family:Arial,sans-serif}
+.header{height:58px;background:#15191c;border-bottom:1px solid #2b3034;display:flex;align-items:center;justify-content:space-between;padding:0 10px;gap:8px}
+.brand{font-size:22px;font-weight:900}.wallet{color:#38e34a;font-weight:700;font-size:14px}
+.how{background:#15191c;border:2px solid #8b1717;color:#fff;border-radius:7px;padding:8px 15px;font-size:15px}
+.wrap{max-width:760px;margin:auto}.bar{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#101315}
+.deposit{background:#20e332;color:#061006;border:0;border-radius:7px;padding:13px 18px;font-weight:800;font-size:16px}.withdraw{background:transparent;color:#fff;border:1px solid #20e332;border-radius:7px;padding:12px 15px;font-weight:700}
+.menu{font-size:30px;padding:5px 8px}.chart{margin:7px;border-radius:16px;background:#050606;border:1px solid #161a1c;overflow:hidden;position:relative;height:505px}
+.rate{position:absolute;top:12px;left:50%;transform:translateX(-50%);border:3px solid #eee;border-radius:7px;padding:5px 12px;font:24px monospace;background:#111;z-index:2}
+svg{width:100%;height:100%}.controls{margin:0 7px 8px;padding:12px;background:#111517;border-radius:14px}
+.row{display:grid;grid-template-columns:50px 1fr 50px 50px;gap:10px;margin-bottom:10px}.small,.preset{background:#101416;border:2px solid #21e23b;color:#fff;border-radius:8px;font-weight:700;font-size:16px}.amount{background:#eee;color:#111;border-radius:7px;display:flex;align-items:center;justify-content:center;font-weight:800}.presets{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:12px}.undo{border-color:#a71919;color:#fff}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.buy,.sell{border:0;border-radius:7px;color:#fff;padding:20px 8px;font-size:24px;font-weight:900}.buy{background:#20e832;color:#071007}.sell{background:#c5161d}.chat{margin:0 7px 20px;background:#050606;min-height:230px;border-radius:14px;overflow:hidden}.chat-title{background:#064b08;text-align:center;font-size:25px;font-weight:800;padding:8px}.messages{padding:18px 8px;line-height:1.7;font-size:14px}.messages b{color:#f0c000}.note{padding:10px;text-align:center;color:#98a2ad;font-size:12px}
+@media(max-width:520px){.chart{height:500px}.how{display:none}.wallet{font-size:12px}.presets{grid-template-columns:1fr 1fr}.buy,.sell{font-size:20px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="header"><div class="brand">TRADE<span style="color:#27e33d">on</span></div><button class="how">How to Trade</button><div class="wallet">Wallet: KSh 0.00</div></header>
+<div class="bar"><strong>👤 {{ user_name }}</strong><div><button class="deposit" onclick="alert('M-Pesa deposit flow will be connected next.')">Deposit</button> <button class="withdraw" onclick="alert('Withdrawal flow will be added after payment integration.')">Withdraw</button> <span class="menu">☰</span></div></div>
+<div class="chart">
+<div class="rate">Rate: <span id="rate">0.0991</span></div>
+<svg viewBox="0 0 700 500" preserveAspectRatio="none">
+<defs><pattern id="grid" width="55" height="55" patternUnits="userSpaceOnUse"><path d="M55 0H0V55" fill="none" stroke="#777" stroke-width="1" stroke-dasharray="2 7" opacity=".65"/></pattern></defs>
+<rect width="700" height="500" fill="#050606"/><rect x="0" y="0" width="700" height="500" fill="url(#grid)"/>
+<path id="area" d="M0 250 L20 230 L45 245 L70 220 L95 250 L120 200 L145 235 L170 250 L195 80 L220 210 L245 190 L270 230 L295 170 L320 235 L345 215 L370 245 L395 230 L420 270 L445 100 L470 230 L495 210 L520 250 L545 180 L570 230 L595 160 L620 245 L650 200 L680 225 L700 140 L700 500 L0 500Z" fill="#0c6b16" opacity=".75"/>
+<path d="M0 250 L20 230 L45 245 L70 220 L95 250 L120 200 L145 235 L170 250 L195 80 L220 210 L245 190 L270 230 L295 170 L320 235 L345 215 L370 245 L395 230 L420 270 L445 100 L470 230 L495 210 L520 250 L545 180 L570 230 L595 160 L620 245 L650 200 L680 225 L700 140" fill="none" stroke="#26e83b" stroke-width="5"/>
+<line x1="0" y1="250" x2="700" y2="250" stroke="#bbb" opacity=".5"/>
+</svg>
+</div>
+<div class="controls">
+<div class="row"><button class="small" onclick="change(-10)">−</button><div class="amount" id="amount">100</div><button class="small" onclick="change(10)">+</button><button class="small" onclick="change(100)">×2</button></div>
+<div class="presets"><button class="preset" onclick="setAmount(30)">30</button><button class="preset" onclick="setAmount(70)">70</button><button class="preset" onclick="setAmount(100)">100</button><button class="preset undo" onclick="setAmount(0)">↶</button></div>
+<div class="actions"><button class="buy" onclick="trade('BUY')">BUY<br>KES <span id="buyAmount">100.00</span></button><button class="sell" onclick="trade('SELL')">SELL<br>KES <span id="sellAmount">100.00</span></button></div>
+</div>
+<div class="chat"><div class="chat-title">💬 Chat</div><div class="messages"><div><b>TRADEon:</b> Welcome to the trading room.</div><div><b>user:</b> How is this game played?</div><div><b>support:</b> Practice with demo trades before real-money features are enabled.</div></div></div>
+<div class="note">TRADEon demo trading • Real deposits and withdrawals will be connected only through verified payment services.</div>
+</div>
+<script>
+let amount=100;
+function render(){document.getElementById('amount').textContent=amount;document.getElementById('buyAmount').textContent=amount.toFixed(2);document.getElementById('sellAmount').textContent=amount.toFixed(2)}
+function change(n){amount=Math.max(0,amount+n);render()}
+function setAmount(n){amount=n;render()}
+function trade(side){if(amount<=0){alert('Choose an amount first.');return}alert('Demo '+side+' order placed for KSh '+amount.toFixed(2)+'.')}
+setInterval(()=>{document.getElementById('rate').textContent=(0.07+Math.random()*0.06).toFixed(4)},1500);render();
+</script>
+</body></html>
