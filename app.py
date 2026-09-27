@@ -36,7 +36,7 @@ def send_otp(phone, otp):
     data = {
         "username": username,
         "to": phone,
-        "message": f"Your TRADEon verification code is {otp}. It expires in 5 minutes."
+        "message": f"Your TRADEON verification code is {otp}. It expires in 5 minutes."
     }
     if sender:
         data["from"] = sender
@@ -156,7 +156,7 @@ def transactions():
 @app.route("/profile")
 def profile():
     if "user_id" not in session: return redirect(url_for("login"))
-    return render_template("simple_page.html", title="Profile", message="Your TRADEon profile will appear here.")
+    return render_template("simple_page.html", title="Profile", message="Your TRADEON profile will appear here.")
 
 @app.route("/refer")
 def refer():
