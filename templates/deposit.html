@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deposit KSh - TRADEON</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#07111f;color:#fff}
+.wrap{max-width:520px;margin:auto;padding:20px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:25px}
+.logo{font-size:25px;font-weight:800}.back{color:#9fb0c7;text-decoration:none}
+.card{background:#101d2d;border:1px solid #24364d;border-radius:18px;padding:22px}
+h1{margin:0 0 8px;font-size:24px}p{color:#9fb0c7;line-height:1.5}
+label{display:block;margin:20px 0 8px;font-weight:700}input{width:100%;padding:16px;border-radius:12px;border:1px solid #344a63;background:#081522;color:#fff;font-size:18px}
+.quick{display:flex;gap:8px;margin:12px 0}.quick button{flex:1;padding:11px;border:1px solid #344a63;background:#15263a;color:#fff;border-radius:10px}
+.main{width:100%;padding:16px;border:0;border-radius:12px;background:#1f8f5f;color:#fff;font-weight:800;font-size:16px;margin-top:15px}
+.note{margin-top:18px;padding:14px;background:#0b1725;border-radius:12px;color:#aebed0;font-size:14px}
+.error{background:#3a1820;color:#ffb5bd;padding:12px;border-radius:10px;margin-bottom:12px}
+.success{background:#123525;color:#a9f0c8;padding:14px;border-radius:10px;margin-bottom:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="top"><div class="logo">TRADEON</div><a class="back" href="/">← Dashboard</a></div>
+<div class="card">
+<h1>Deposit KSh</h1>
+<p>Add funds to your TRADEON wallet using M-Pesa.</p>
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+{% if message %}<div class="success">{{ message }}</div>{% endif %}
+<form method="post">
+<label for="amount">Amount (KSh)</label>
+<input id="amount" name="amount" type="number" min="10" max="150000" step="1" placeholder="Enter amount" value="{{ amount }}">
+<div class="quick">
+<button type="button" onclick="amount.value=30">30</button>
+<button type="button" onclick="amount.value=100">100</button>
+<button type="button" onclick="amount.value=500">500</button>
+<button type="button" onclick="amount.value=1000">1,000</button>
+</div>
+<button class="main" type="submit">Continue with M-Pesa</button>
+</form>
+<div class="note"><b>Important:</b> This screen is prepared for the M-Pesa integration. No real money is moved by this demo flow yet.</div>
+</div>
+</div>
+</body>
+</html>
