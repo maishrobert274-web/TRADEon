@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session
 from werkzeug.security import generate_password_hash, check_password_hash
-import sqlite3, os, random, time, requests
+import sqlite3, os, random, time, requests, base64
+from datetime import datetime
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "tradeon-demo-secret-change-later")
@@ -17,6 +18,8 @@ def init_db():
         cols = [r[1] for r in con.execute("PRAGMA table_info(users)").fetchall()]
         if "verified" not in cols:
             con.execute("ALTER TABLE users ADD COLUMN verified INTEGER NOT NULL DEFAULT 0")
+        con.execute("""CREATE TABLE IF NOT EXISTS deposits (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, amount REAL NOT NULL, phone TEXT NOT NULL, merchant_request_id TEXT, checkout_request_id TEXT UNIQUE, mpesa_receipt TEXT, status TEXT NOT NULL DEFAULT "PENDING", created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
+        con.execute("""CREATE TABLE IF NOT EXISTS wallets (user_id INTEGER PRIMARY KEY, balance REAL NOT NULL DEFAULT 0)""")
 init_db()
 
 def normalize_phone(phone):
@@ -143,24 +146,94 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
+def daraja_token():
+    key = os.environ.get("MPESA_CONSUMER_KEY")
+    secret = os.environ.get("MPESA_CONSUMER_SECRET")
+    if not key or not secret:
+        raise RuntimeError("M-Pesa credentials are not configured.")
+    base = os.environ.get("MPESA_BASE_URL", "https://sandbox.safaricom.co.ke")
+    r = requests.get(base + "/oauth/v1/generate?grant_type=client_credentials", auth=(key, secret), timeout=20)
+    r.raise_for_status()
+    return r.json()["access_token"]
+
+def mpesa_timestamp():
+    return datetime.now().strftime("%Y%m%d%H%M%S")
+
+def mpesa_password(shortcode, passkey, timestamp):
+    return base64.b64encode(f"{shortcode}{passkey}{timestamp}".encode()).decode()
+
 @app.route("/deposit", methods=["GET", "POST"])
 def deposit():
     if "user_id" not in session:
         return redirect(url_for("login"))
     error = None
+    message = None
     amount = request.form.get("amount", "").strip() if request.method == "POST" else ""
     if request.method == "POST":
+        phone = normalize_phone(request.form.get("phone", "")).replace("+", "")
         try:
             value = float(amount)
-            if value < 10:
-                error = "Minimum deposit is KSh 10."
-            elif value > 150000:
-                error = "Maximum deposit is KSh 150,000 per request."
+            if value < 10 or value > 150000:
+                error = "Enter an amount between KSh 10 and KSh 150,000."
+            elif not (phone.isdigit() and phone.startswith("254") and len(phone) == 12):
+                error = "Enter a valid Kenyan M-Pesa number."
             else:
-                return render_template("deposit.html", amount=f"{value:,.2f}", message="M-Pesa payment integration will be connected next. This is currently a demo deposit screen.")
-        except ValueError:
-            error = "Enter a valid KSh amount."
-    return render_template("deposit.html", error=error, amount=amount)
+                shortcode = os.environ.get("MPESA_SHORTCODE")
+                passkey = os.environ.get("MPESA_PASSKEY")
+                callback_base = os.environ.get("MPESA_CALLBACK_BASE_URL", os.environ.get("RENDER_EXTERNAL_URL", "")).rstrip("/")
+                if not shortcode or not passkey or not callback_base:
+                    error = "M-Pesa integration is not configured on the server yet."
+                else:
+                    token = daraja_token()
+                    ts = mpesa_timestamp()
+                    payload = {
+                        "BusinessShortCode": shortcode,
+                        "Password": mpesa_password(shortcode, passkey, ts),
+                        "Timestamp": ts,
+                        "TransactionType": os.environ.get("MPESA_TRANSACTION_TYPE", "CustomerPayBillOnline"),
+                        "Amount": int(value),
+                        "PartyA": phone,
+                        "PartyB": shortcode,
+                        "PhoneNumber": phone,
+                        "CallBackURL": callback_base + "/mpesa/callback",
+                        "AccountReference": f"TRADEON-{session['user_id']}",
+                        "TransactionDesc": "TRADEON wallet deposit"
+                    }
+                    base = os.environ.get("MPESA_BASE_URL", "https://sandbox.safaricom.co.ke")
+                    r = requests.post(base + "/mpesa/stkpush/v1/processrequest", headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}, json=payload, timeout=30)
+                    data = r.json()
+                    if r.ok and data.get("ResponseCode") == "0":
+                        with sqlite3.connect(DB) as con:
+                            con.execute("INSERT INTO deposits (user_id,amount,phone,merchant_request_id,checkout_request_id,status) VALUES (?,?,?,?,?,?)", (session["user_id"], value, phone, data.get("MerchantRequestID"), data.get("CheckoutRequestID"), "PENDING"))
+                            con.execute("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)", (session["user_id"],))
+                        message = "M-Pesa prompt sent. Check your phone and enter your M-Pesa PIN. Your wallet will only be credited after Safaricom confirms the payment."
+                    else:
+                        error = data.get("errorMessage") or data.get("ResponseDescription") or "Safaricom could not start the payment."
+        except (ValueError, requests.RequestException, RuntimeError, KeyError):
+            error = "Unable to start the M-Pesa payment. Check the server configuration and try again."
+    return render_template("deposit.html", error=error, message=message, amount=amount)
+
+@app.route("/mpesa/callback", methods=["POST"])
+def mpesa_callback():
+    data = request.get_json(silent=True) or {}
+    callback = data.get("Body", {}).get("stkCallback", {})
+    checkout_id = callback.get("CheckoutRequestID")
+    result_code = callback.get("ResultCode")
+    items = callback.get("CallbackMetadata", {}).get("Item", [])
+    meta = {item.get("Name"): item.get("Value") for item in items if item.get("Name")}
+    receipt = meta.get("MpesaReceiptNumber")
+    amount = meta.get("Amount")
+    if checkout_id:
+        with sqlite3.connect(DB) as con:
+            row = con.execute("SELECT id,user_id,amount,status FROM deposits WHERE checkout_request_id=?", (checkout_id,)).fetchone()
+            if row and row[3] == "PENDING":
+                if result_code == 0 and receipt and amount is not None and float(amount) == float(row[2]):
+                    con.execute("UPDATE deposits SET status='SUCCESS', mpesa_receipt=? WHERE id=?", (receipt, row[0]))
+                    con.execute("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)", (row[1],))
+                    con.execute("UPDATE wallets SET balance=balance+? WHERE user_id=?", (float(amount), row[1]))
+                elif result_code != 0:
+                    con.execute("UPDATE deposits SET status='FAILED' WHERE id=?", (row[0],))
+    return {"ResultCode": 0, "ResultDesc": "Accepted"}
 
 @app.route("/trade")
 def trade():
