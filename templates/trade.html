@@ -15,12 +15,22 @@
 svg{width:100%;height:100%}.controls{margin:0 7px 8px;padding:12px;background:#111517;border-radius:14px}
 .row{display:grid;grid-template-columns:50px 1fr 50px 50px;gap:10px;margin-bottom:10px}.small,.preset{background:#101416;border:2px solid #21e23b;color:#fff;border-radius:8px;font-weight:700;font-size:16px}.amount{background:#eee;color:#111;border-radius:7px;display:flex;align-items:center;justify-content:center;font-weight:800}.presets{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-bottom:12px}.undo{border-color:#a71919;color:#fff}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.buy,.sell{border:0;border-radius:7px;color:#fff;padding:20px 8px;font-size:24px;font-weight:900}.buy{background:#20e832;color:#071007}.sell{background:#c5161d}.chat{margin:0 7px 20px;background:#050606;min-height:230px;border-radius:14px;overflow:hidden}.chat-title{background:#064b08;text-align:center;font-size:25px;font-weight:800;padding:8px}.messages{padding:18px 8px;line-height:1.7;font-size:14px}.messages b{color:#f0c000}.note{padding:10px;text-align:center;color:#98a2ad;font-size:12px}
 @media(max-width:520px){.chart{height:500px}.how{display:none}.wallet{font-size:12px}.presets{grid-template-columns:1fr 1fr}.buy,.sell{font-size:20px}}
-</style>
+.sideMenu{position:fixed;z-index:20;top:0;right:-320px;width:310px;max-width:88vw;height:100vh;background:#2b2b2b;box-shadow:-8px 0 25px #0008;transition:right .25s;padding-top:10px}.sideMenu.open{right:0}.menuTitle{padding:18px;font-size:21px;font-weight:800;border-bottom:1px solid #444;display:flex;justify-content:space-between}.menuTitle button{background:none;border:0;color:white;font-size:28px}.sideMenu a{display:flex;gap:18px;align-items:center;color:#fff;text-decoration:none;padding:18px;font-size:17px;border-bottom:1px solid #3b3b3b}.sideMenu a:hover{background:#383838}.shade{display:none;position:fixed;z-index:19;inset:0;background:#0008}.shade.open{display:block}</style>
 </head>
 <body>
 <div class="wrap">
 <header class="header"><div class="brand">TRADE<span style="color:#27e33d">on</span></div><button class="how">How to Trade</button><div class="wallet">Wallet: KSh 0.00</div></header>
-<div class="bar"><strong>👤 {{ user_name }}</strong><div><button class="deposit" onclick="alert('M-Pesa deposit flow will be connected next.')">Deposit</button> <button class="withdraw" onclick="alert('Withdrawal flow will be added after payment integration.')">Withdraw</button> <span class="menu">☰</span></div></div>
+<div class="bar"><strong>👤 {{ user_name }}</strong><div><button class="deposit" onclick="alert('M-Pesa deposit flow will be connected next.')">Deposit</button> <button class="withdraw" onclick="alert('Withdrawal flow will be added after payment integration.')">Withdraw</button> <button class="menu" onclick="toggleMenu()">☰</button></div></div>
+<div id="sideMenu" class="sideMenu">
+  <div class="menuTitle">TRADEon Menu <button onclick="toggleMenu()">×</button></div>
+  <a href="/how-to-trade">ℹ️ <span>How to Trade</span></a>
+  <a href="/trade">📊 <span>Trade</span></a>
+  <a href="/transactions">💵 <span>Transactions</span></a>
+  <a href="/profile">👤 <span>Profile</span></a>
+  <a href="/refer">↗️ <span>Refer & Earn</span></a>
+  <a href="/logout">🚪 <span>Logout</span></a>
+</div>
+<div id="shade" class="shade" onclick="toggleMenu()"></div>
 <div class="chart">
 <div class="rate">Rate: <span id="rate">0.0991</span></div>
 <svg viewBox="0 0 700 500" preserveAspectRatio="none">
@@ -46,5 +56,5 @@ function change(n){amount=Math.max(0,amount+n);render()}
 function setAmount(n){amount=n;render()}
 function trade(side){if(amount<=0){alert('Choose an amount first.');return}alert('Demo '+side+' order placed for KSh '+amount.toFixed(2)+'.')}
 setInterval(()=>{document.getElementById('rate').textContent=(0.07+Math.random()*0.06).toFixed(4)},1500);render();
-</script>
+function toggleMenu(){document.getElementById('sideMenu').classList.toggle('open');document.getElementById('shade').classList.toggle('open')}</script>
 </body></html>
