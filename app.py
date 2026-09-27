@@ -195,7 +195,7 @@ def deposit():
                         "PartyA": phone,
                         "PartyB": shortcode,
                         "PhoneNumber": phone,
-                        "CallBackURL": callback_base + "/mpesa/callback",
+                        "CallBackURL": callback_base + "/payments/callback",
                         "AccountReference": f"TRADEON-{session['user_id']}",
                         "TransactionDesc": "TRADEON wallet deposit"
                     }
