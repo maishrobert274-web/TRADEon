@@ -57,5 +57,25 @@ def trade():
     if "user_id" not in session: return redirect(url_for("login"))
     return render_template("trade.html", user_name=session.get("user_name"))
 
+@app.route("/transactions")
+def transactions():
+    if "user_id" not in session: return redirect(url_for("login"))
+    return render_template("simple_page.html", title="Transactions", message="Your transaction history will appear here.")
+
+@app.route("/profile")
+def profile():
+    if "user_id" not in session: return redirect(url_for("login"))
+    return render_template("simple_page.html", title="Profile", message="Your TRADEon profile will appear here.")
+
+@app.route("/refer")
+def refer():
+    if "user_id" not in session: return redirect(url_for("login"))
+    return render_template("simple_page.html", title="Refer & Earn", message="Your referral link and earnings will appear here.")
+
+@app.route("/how-to-trade")
+def how_to_trade():
+    if "user_id" not in session: return redirect(url_for("login"))
+    return render_template("simple_page.html", title="How to Trade", message="Trading instructions will appear here.")
+
 if __name__=="__main__":
     app.run(host="0.0.0.0",port=5000)
