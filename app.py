@@ -143,6 +143,25 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
+@app.route("/deposit", methods=["GET", "POST"])
+def deposit():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    error = None
+    amount = request.form.get("amount", "").strip() if request.method == "POST" else ""
+    if request.method == "POST":
+        try:
+            value = float(amount)
+            if value < 10:
+                error = "Minimum deposit is KSh 10."
+            elif value > 150000:
+                error = "Maximum deposit is KSh 150,000 per request."
+            else:
+                return render_template("deposit.html", amount=f"{value:,.2f}", message="M-Pesa payment integration will be connected next. This is currently a demo deposit screen.")
+        except ValueError:
+            error = "Enter a valid KSh amount."
+    return render_template("deposit.html", error=error, amount=amount)
+
 @app.route("/trade")
 def trade():
     if "user_id" not in session: return redirect(url_for("login"))
