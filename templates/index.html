@@ -1,1 +1,50 @@
-
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TRADEon Kenya</title>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Arial,sans-serif;background:#f5f7fb;color:#172033}
+    header{background:#101828;color:white;padding:18px 20px;display:flex;justify-content:space-between;align-items:center}
+    .logo{font-size:24px;font-weight:800}.country{font-size:13px;opacity:.8}
+    main{max-width:900px;margin:auto;padding:22px}
+    .hero{background:#fff;border-radius:18px;padding:24px;box-shadow:0 5px 20px #0000000d}
+    h1{margin:0 0 8px;font-size:30px}.muted{color:#667085}
+    .balance{font-size:34px;font-weight:800;margin:18px 0}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px}
+    button{border:0;border-radius:12px;padding:14px 10px;font-weight:700;font-size:15px;cursor:pointer}
+    .primary{background:#12b76a;color:white}.secondary{background:#eef2f6;color:#172033}
+    .card{background:#fff;border-radius:16px;padding:18px;margin-top:16px;box-shadow:0 5px 20px #0000000a}
+    .row{display:flex;justify-content:space-between;padding:13px 0;border-bottom:1px solid #eaecf0}
+    .row:last-child{border-bottom:0}
+    @media(max-width:600px){.grid{grid-template-columns:1fr}.balance{font-size:28px}}
+  </style>
+</head>
+<body>
+<header><div class="logo">TRADEon</div><div class="country">🇰🇪 Kenya • KSh</div></header>
+<main>
+  <section class="hero">
+    <div class="muted">Demo trading dashboard</div>
+    <h1>Welcome to TRADEon</h1>
+    <div class="balance">KSh 0.00</div>
+    <div class="muted">Available balance</div>
+    <div class="grid">
+      <button class="primary" onclick="alert('Deposit flow will be connected to a legitimate M-Pesa payment provider.')">Deposit KSh</button>
+      <button class="secondary" onclick="alert('Withdrawal flow will be added after account and payment verification.')">Withdraw KSh</button>
+      <button class="secondary" onclick="alert('Trading screen coming next.')">Start Trading</button>
+    </div>
+  </section>
+  <section class="card">
+    <h2>Recent activity</h2>
+    <div class="row"><span>Account created</span><span class="muted">Today</span></div>
+    <div class="row"><span>Balance</span><strong>KSh 0.00</strong></div>
+  </section>
+  <section class="card">
+    <h2>Next features</h2>
+    <p class="muted">Login • M-Pesa deposits • withdrawals • trading • transaction history • referrals • profile • admin controls.</p>
+  </section>
+</main>
+</body>
+</html>
