@@ -26,7 +26,7 @@ label{display:block;margin:20px 0 8px;font-weight:700}input{width:100%;padding:1
 {% if error %}<div class="error">{{ error }}</div>{% endif %}
 {% if message %}<div class="success">{{ message }}</div>{% endif %}
 <form method="post">
-<label for="amount">Amount (KSh)</label>
+<label for="phone">M-Pesa phone number</label><input id="phone" name="phone" type="tel" inputmode="numeric" placeholder="07XXXXXXXX" required><label for="amount">Amount (KSh)</label>
 <input id="amount" name="amount" type="number" min="10" max="150000" step="1" placeholder="Enter amount" value="{{ amount }}">
 <div class="quick">
 <button type="button" onclick="amount.value=30">30</button>
@@ -36,7 +36,7 @@ label{display:block;margin:20px 0 8px;font-weight:700}input{width:100%;padding:1
 </div>
 <button class="main" type="submit">Continue with M-Pesa</button>
 </form>
-<div class="note"><b>Important:</b> This screen is prepared for the M-Pesa integration. No real money is moved by this demo flow yet.</div>
+<div class="note"><b>How it works:</b> Enter your M-Pesa number and amount. TRADEON requests an M-Pesa prompt. Your wallet is credited only after Safaricom sends a successful callback.</div>
 </div>
 </div>
 </body>
