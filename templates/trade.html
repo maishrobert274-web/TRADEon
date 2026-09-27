@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TRADEon — Trade</title>
+<title>TRADEON — Trade</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#090b0d;color:#fff;font-family:Arial,sans-serif}
 .header{height:58px;background:#15191c;border-bottom:1px solid #2b3034;display:flex;align-items:center;justify-content:space-between;padding:0 10px;gap:8px}
@@ -22,7 +22,7 @@ svg{width:100%;height:100%}.controls{margin:0 7px 8px;padding:12px;background:#1
 <header class="header"><div class="brand">TRADE<span style="color:#27e33d">on</span></div><button class="how">How to Trade</button><div class="wallet">Wallet: KSh 0.00</div></header>
 <div class="bar"><strong>👤 {{ user_name }}</strong><div><button class="deposit" onclick="alert('M-Pesa deposit flow will be connected next.')">Deposit</button> <button class="withdraw" onclick="alert('Withdrawal flow will be added after payment integration.')">Withdraw</button> <button class="menu" onclick="toggleMenu()">☰</button></div></div>
 <div id="sideMenu" class="sideMenu">
-  <div class="menuTitle">TRADEon Menu <button onclick="toggleMenu()">×</button></div>
+  <div class="menuTitle">TRADEON Menu <button onclick="toggleMenu()">×</button></div>
   <a href="/how-to-trade">ℹ️ <span>How to Trade</span></a>
   <a href="/trade">📊 <span>Trade</span></a>
   <a href="/transactions">💵 <span>Transactions</span></a>
@@ -46,8 +46,8 @@ svg{width:100%;height:100%}.controls{margin:0 7px 8px;padding:12px;background:#1
 <div class="presets"><button class="preset" onclick="setAmount(30)">30</button><button class="preset" onclick="setAmount(70)">70</button><button class="preset" onclick="setAmount(100)">100</button><button class="preset undo" onclick="setAmount(0)">↶</button></div>
 <div class="actions"><button class="buy" onclick="trade('BUY')">BUY<br>KES <span id="buyAmount">100.00</span></button><button class="sell" onclick="trade('SELL')">SELL<br>KES <span id="sellAmount">100.00</span></button></div>
 </div>
-<div class="chat"><div class="chat-title">💬 Chat</div><div class="messages"><div><b>TRADEon:</b> Welcome to the trading room.</div><div><b>user:</b> How is this game played?</div><div><b>support:</b> Practice with demo trades before real-money features are enabled.</div></div></div>
-<div class="note">TRADEon demo trading • Real deposits and withdrawals will be connected only through verified payment services.</div>
+<div class="chat"><div class="chat-title">💬 Chat</div><div class="messages"><div><b>TRADEON:</b> Welcome to the trading room.</div><div><b>user:</b> How is this game played?</div><div><b>support:</b> Practice with demo trades before real-money features are enabled.</div></div></div>
+<div class="note">TRADEON demo trading • Real deposits and withdrawals will be connected only through verified payment services.</div>
 </div>
 <script>
 let amount=100;
