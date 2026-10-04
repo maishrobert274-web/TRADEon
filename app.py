@@ -20,6 +20,7 @@ def init_db():
             con.execute("ALTER TABLE users ADD COLUMN verified INTEGER NOT NULL DEFAULT 0")
         con.execute("""CREATE TABLE IF NOT EXISTS deposits (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, amount REAL NOT NULL, phone TEXT NOT NULL, merchant_request_id TEXT, checkout_request_id TEXT UNIQUE, mpesa_receipt TEXT, status TEXT NOT NULL DEFAULT "PENDING", created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
         con.execute("""CREATE TABLE IF NOT EXISTS wallets (user_id INTEGER PRIMARY KEY, balance REAL NOT NULL DEFAULT 0)""")
+        con.execute("""CREATE TABLE IF NOT EXISTS trades (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, pair TEXT NOT NULL, side TEXT NOT NULL, amount REAL NOT NULL, entry_price REAL NOT NULL, status TEXT NOT NULL DEFAULT "OPEN", pnl REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, closed_at TEXT)""")
         con.execute("""CREATE TABLE IF NOT EXISTS signals (id INTEGER PRIMARY KEY AUTOINCREMENT, pair TEXT NOT NULL, action TEXT NOT NULL, entry_price TEXT, stop_loss TEXT, take_profit TEXT, strength TEXT NOT NULL, note TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, active INTEGER NOT NULL DEFAULT 1)""")
 init_db()
 
@@ -236,6 +237,35 @@ def mpesa_callback():
                     con.execute("UPDATE deposits SET status='FAILED' WHERE id=?", (row[0],))
     return {"ResultCode": 0, "ResultDesc": "Accepted"}
 
+@app.route("/api/trade", methods=["POST"])
+def api_trade():
+    if "user_id" not in session:
+        return {"error": "login required"}, 401
+    data = request.get_json(silent=True) or {}
+    pair = str(data.get("pair", "")).upper()
+    side = str(data.get("side", "")).upper()
+    try:
+        amount = float(data.get("amount", 0))
+    except (TypeError, ValueError):
+        amount = 0
+    symbols = {"BTC/USDT": "BTCUSDT", "ETH/USDT": "ETHUSDT", "SOL/USDT": "SOLUSDT"}
+    if pair not in symbols or side not in ("BUY", "SELL") or amount < 10:
+        return {"error": "Invalid trade details. Minimum is KSh 10."}, 400
+    try:
+        response = requests.get("https://api.binance.com/api/v3/ticker/price", params={"symbol": symbols[pair]}, timeout=10)
+        response.raise_for_status()
+        price = float(response.json()["price"])
+    except (requests.RequestException, KeyError, ValueError):
+        return {"error": "Could not get the current market price."}, 503
+    with sqlite3.connect(DB) as con:
+        con.execute("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)", (session["user_id"],))
+        balance = con.execute("SELECT balance FROM wallets WHERE user_id=?", (session["user_id"],)).fetchone()[0]
+        if amount > balance:
+            return {"error": "Insufficient wallet balance. Available: KSh %.2f" % balance}, 400
+        con.execute("UPDATE wallets SET balance=balance-? WHERE user_id=?", (amount, session["user_id"]))
+        cur = con.execute("INSERT INTO trades (user_id,pair,side,amount,entry_price,status) VALUES (?,?,?,?,?,'OPEN')", (session["user_id"], pair, side, amount, price))
+        trade_id = cur.lastrowid
+    return {"ok": True, "trade_id": trade_id, "pair": pair, "side": side, "amount": amount, "entry_price": price, "status": "OPEN"}
 @app.route("/api/market")
 def market_price():
     if "user_id" not in session:
