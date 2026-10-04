@@ -259,11 +259,6 @@ def refer():
 def how_to_trade():
     if "user_id" not in session: return redirect(url_for("login"))
     return render_template("simple_page.html", title="How to Trade", message="Trading instructions will appear here.")
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
-
-
 # ---------------- TRADEON MANAGER (ADMIN) ----------------
 def admin_required():
     return session.get("admin_logged_in") is True
@@ -280,7 +275,7 @@ def manager_login():
             session["admin_logged_in"] = True
             return redirect(url_for("manager_dashboard"))
         error = "Invalid manager login."
-    return render_template("manager_login.html", error=error)
+    return """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Manager</title><style>body{font-family:Arial;background:#f3f6f9;display:grid;place-items:center;min-height:100vh}.card{background:white;padding:28px;border-radius:16px;width:min(420px,90%)}input,button{box-sizing:border-box;width:100%;padding:13px;margin:8px 0;border-radius:9px;border:1px solid #ccd3da}button{background:#111;color:white;border:0;font-weight:bold}.error{color:#b00020}</style></head><body><div class="card"><h1>TRADEON MANAGER</h1><p>Manager Login</p>""" + (f"<p class='error'>{error}</p>" if error else "") + """<form method="post"><input name="username" placeholder="Username" required><input name="password" type="password" placeholder="Password" required><button>Sign in</button></form></div></body></html>"""
 
 @app.route("/manager/logout")
 def manager_logout():
@@ -301,4 +296,11 @@ def manager_dashboard():
             FROM deposits d JOIN users u ON u.id=d.user_id
             ORDER BY d.id DESC LIMIT 50
         """).fetchall()
-    return render_template("manager.html", users=users, verified=verified, pending=pending, successful=successful, deposits=deposits)
+    rows = "".join(
+        f"<tr><td>{d[0]}</td><td>{d[1]}</td><td>{d[2]}</td><td>KSh {d[3]:,.2f}</td><td>{d[4]}</td><td>{d[5] or '-'}</td><td>{d[6]}</td></tr>"
+        for d in deposits
+    )
+    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Manager</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa;color:#111}}header{{background:#111;color:white;padding:18px 5%;display:flex;justify-content:space-between}}main{{padding:24px 5%}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}}.card{{background:white;padding:18px;border-radius:12px;box-shadow:0 2px 10px #0001}}table{{width:100%;border-collapse:collapse;background:white;margin-top:20px;font-size:13px}}th,td{{padding:10px;border-bottom:1px solid #eee;text-align:left}}.tablewrap{{overflow:auto}}a{{color:white}}</style></head><body><header><b>TRADEON MANAGER</b><a href="/manager/logout">Logout</a></header><main><h2>Dashboard</h2><div class="cards"><div class="card"><b>Users</b><h2>{users}</h2></div><div class="card"><b>Verified</b><h2>{verified}</h2></div><div class="card"><b>Pending deposits</b><h2>{pending}</h2></div><div class="card"><b>Successful deposits</b><h2>KSh {successful:,.2f}</h2></div></div><h2>Recent deposits</h2><div class="tablewrap"><table><tr><th>ID</th><th>User</th><th>Phone</th><th>Amount</th><th>Status</th><th>Receipt</th><th>Date</th></tr>{rows or "<tr><td colspan='7'>No deposits yet.</td></tr>"}</table></div></main></body></html>"""
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
