@@ -1,0 +1,13 @@
+<!doctype html>
+<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TradeOn Manager</title>
+<style>body{font-family:Arial;background:#f4f6f8;margin:0;color:#111}.top{background:#111;color:#fff;padding:18px;display:flex;justify-content:space-between}.top a{color:#fff}.wrap{padding:18px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}.card{background:#fff;padding:18px;border-radius:12px}.num{font-size:25px;font-weight:bold}table{width:100%;border-collapse:collapse;background:#fff;margin-top:18px}th,td{padding:10px;border-bottom:1px solid #eee;text-align:left;font-size:13px}.ok{color:green}.pending{color:#b36b00}.failed{color:#b00020}</style></head>
+<body><div class="top"><b>TRADEON MANAGER</b><a href="/manager/logout">Logout</a></div>
+<div class="wrap"><h2>Dashboard</h2><div class="cards">
+<div class="card"><div>Users</div><div class="num">{{ users }}</div></div>
+<div class="card"><div>Verified users</div><div class="num">{{ verified }}</div></div>
+<div class="card"><div>Pending deposits</div><div class="num">{{ pending }}</div></div>
+<div class="card"><div>Successful deposits</div><div class="num">KSh {{ "%.2f"|format(successful) }}</div></div>
+</div>
+<h2>Recent deposits</h2><table><tr><th>ID</th><th>User</th><th>Phone</th><th>Amount</th><th>Status</th><th>Receipt</th><th>Date</th></tr>
+{% for d in deposits %}<tr><td>{{d[0]}}</td><td>{{d[1]}}</td><td>{{d[2]}}</td><td>KSh {{ "%.2f"|format(d[3]) }}</td><td class="{{d[4]|lower}}">{{d[4]}}</td><td>{{d[5] or "-"}}</td><td>{{d[6]}}</td></tr>{% else %}<tr><td colspan="7">No deposits yet.</td></tr>{% endfor %}</table>
+</div></body></html>
