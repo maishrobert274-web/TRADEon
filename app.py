@@ -20,6 +20,7 @@ def init_db():
             con.execute("ALTER TABLE users ADD COLUMN verified INTEGER NOT NULL DEFAULT 0")
         con.execute("""CREATE TABLE IF NOT EXISTS deposits (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, amount REAL NOT NULL, phone TEXT NOT NULL, merchant_request_id TEXT, checkout_request_id TEXT UNIQUE, mpesa_receipt TEXT, status TEXT NOT NULL DEFAULT "PENDING", created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
         con.execute("""CREATE TABLE IF NOT EXISTS wallets (user_id INTEGER PRIMARY KEY, balance REAL NOT NULL DEFAULT 0)""")
+        con.execute("""CREATE TABLE IF NOT EXISTS signals (id INTEGER PRIMARY KEY AUTOINCREMENT, pair TEXT NOT NULL, action TEXT NOT NULL, entry_price TEXT, stop_loss TEXT, take_profit TEXT, strength TEXT NOT NULL, note TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, active INTEGER NOT NULL DEFAULT 1)""")
 init_db()
 
 def normalize_phone(phone):
@@ -239,15 +240,93 @@ def mpesa_callback():
 def signals():
     if "user_id" not in session:
         return redirect(url_for("login"))
-    signals = [("BTC/USDT","BUY","Watch for bullish confirmation","Medium"),("ETH/USDT","SELL","Watch for bearish confirmation","Medium"),("SOL/USDT","BUY","Momentum setup","Low")]
-    cards = "".join(f"<div class='card'><h2>{s[0]}</h2><p class='{s[1].lower()}'>{s[1]}</p><p>{s[2]}</p><b>Strength: {s[3]}</b></div>" for s in signals)
-    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Signals</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa}}header{{background:#111;color:white;padding:18px 5%}}main{{padding:24px 5%}}.card{{background:white;padding:18px;border-radius:12px;margin:12px 0}}.buy{{color:green;font-size:24px;font-weight:bold}}.sell{{color:#c00;font-size:24px;font-weight:bold}}a{{color:white}}</style></head><body><header><b>TRADEON — SIGNALS</b> &nbsp; <a href="/">Dashboard</a></header><main><h1>Trading Signals</h1><p>Demo signals for development. These are not financial advice.</p>{cards}</main></body></html>"""
+    with sqlite3.connect(DB) as con:
+        rows = con.execute("""
+            SELECT id,pair,action,entry_price,stop_loss,take_profit,strength,note,created_at
+            FROM signals WHERE active=1 ORDER BY id DESC LIMIT 50
+        """).fetchall()
+    cards = ""
+    for s in rows:
+        action_class = "buy" if s[2] == "BUY" else "sell"
+        cards += f"""<div class="card">
+            <div class="top"><h2>{s[1]}</h2><span class="{action_class}">{s[2]}</span></div>
+            <p><b>Strength:</b> {s[6]}</p>
+            <p><b>Entry:</b> {s[3] or '-'} &nbsp; <b>Stop Loss:</b> {s[4] or '-'} &nbsp; <b>Take Profit:</b> {s[5] or '-'}</p>
+            <p>{s[7] or ''}</p>
+            <small>Published: {s[8]}</small>
+        </div>"""
+    if not cards:
+        cards = "<div class='card'><h3>No active signals</h3><p>New signals will appear here when the TradeOn Manager publishes them.</p></div>"
+    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>TRADEON Signals</title>
+    <style>
+    body{{font-family:Arial;margin:0;background:#f5f7fa;color:#111}}header{{background:#111;color:white;padding:18px 5%}}
+    main{{padding:24px 5%;max-width:900px;margin:auto}}.card{{background:white;padding:18px;border-radius:12px;margin:12px 0;box-shadow:0 2px 8px #0001}}
+    .top{{display:flex;justify-content:space-between;align-items:center}}.buy{{color:green;font-size:22px;font-weight:bold}}.sell{{color:#c00;font-size:22px;font-weight:bold}}
+    a{{color:white;text-decoration:none}}
+    </style></head><body><header><b>TRADEON — SIGNALS</b> &nbsp; <a href="/">Dashboard</a></header>
+    <main><h1>Trading Signals</h1><p>Signals published by the TradeOn Manager. Trading involves risk.</p>{cards}</main></body></html>"""
 
-@app.route("/manager/signals")
+@app.route("/manager/signals", methods=["GET", "POST"])
 def manager_signals():
     if not admin_required():
         return redirect(url_for("manager_login"))
-    return redirect(url_for("signals"))
+    error = None
+    if request.method == "POST":
+        pair = request.form.get("pair", "").strip().upper()
+        action = request.form.get("action", "").strip().upper()
+        entry = request.form.get("entry_price", "").strip()
+        stop_loss = request.form.get("stop_loss", "").strip()
+        take_profit = request.form.get("take_profit", "").strip()
+        strength = request.form.get("strength", "Medium").strip()
+        note = request.form.get("note", "").strip()
+        if not pair or action not in ("BUY", "SELL"):
+            error = "Enter a pair and choose BUY or SELL."
+        else:
+            with sqlite3.connect(DB) as con:
+                con.execute("""INSERT INTO signals
+                    (pair,action,entry_price,stop_loss,take_profit,strength,note,active)
+                    VALUES (?,?,?,?,?,?,?,1)""",
+                    (pair, action, entry, stop_loss, take_profit, strength, note))
+            return redirect(url_for("manager_signals"))
+
+    with sqlite3.connect(DB) as con:
+        rows = con.execute("""SELECT id,pair,action,entry_price,stop_loss,take_profit,strength,note,created_at,active
+                              FROM signals ORDER BY id DESC LIMIT 100""").fetchall()
+    items = ""
+    for s in rows:
+        items += f"""<tr><td>{s[0]}</td><td>{s[1]}</td><td>{s[2]}</td><td>{s[3] or '-'}</td>
+        <td>{s[4] or '-'}</td><td>{s[5] or '-'}</td><td>{s[6]}</td><td>{'Active' if s[9] else 'Hidden'}</td>
+        <td><form method="post" action="/manager/signals/{s[0]}/toggle"><button>{'Hide' if s[9] else 'Publish'}</button></form></td></tr>"""
+    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Manage Signals</title><style>
+    body{{font-family:Arial;margin:0;background:#f5f7fa}}header{{background:#111;color:white;padding:18px 5%}}
+    main{{padding:24px 5%}}.card{{background:white;padding:18px;border-radius:12px;margin-bottom:18px}}
+    input,select,textarea,button{{box-sizing:border-box;width:100%;padding:12px;margin:6px 0;border-radius:8px;border:1px solid #ccc}}
+    button{{background:#111;color:white;font-weight:bold}}.grid{{display:grid;grid-template-columns:1fr 1fr;gap:10px}}
+    .wrap{{overflow:auto}}table{{width:100%;min-width:850px;border-collapse:collapse;background:white}}th,td{{padding:9px;border-bottom:1px solid #eee;text-align:left;font-size:13px}}
+    a{{color:white;text-decoration:none}}.error{{color:#b00020;font-weight:bold}}
+    </style></head><body><header><b>TRADEON MANAGER — SIGNALS</b> &nbsp; <a href="/manager">Dashboard</a></header>
+    <main><h2>Create Signal</h2><div class="card">{("<p class='error'>"+error+"</p>") if error else ""}
+    <form method="post">
+      <div class="grid"><input name="pair" placeholder="Pair e.g. BTC/USDT" required>
+      <select name="action"><option value="BUY">BUY</option><option value="SELL">SELL</option></select></div>
+      <div class="grid"><input name="entry_price" placeholder="Entry price"><input name="stop_loss" placeholder="Stop loss"></div>
+      <div class="grid"><input name="take_profit" placeholder="Take profit">
+      <select name="strength"><option>Low</option><option selected>Medium</option><option>High</option></select></div>
+      <textarea name="note" rows="3" placeholder="Signal note / reason"></textarea>
+      <button>Publish Signal</button>
+    </form></div>
+    <h2>Published Signals</h2><div class="wrap"><table><tr><th>ID</th><th>Pair</th><th>Action</th><th>Entry</th><th>Stop</th><th>Take</th><th>Strength</th><th>Status</th><th>Action</th></tr>{items or "<tr><td colspan='9'>No signals yet.</td></tr>"}</table></div>
+    </main></body></html>"""
+
+@app.route("/manager/signals/<int:signal_id>/toggle", methods=["POST"])
+def manager_signal_toggle(signal_id):
+    if not admin_required():
+        return redirect(url_for("manager_login"))
+    with sqlite3.connect(DB) as con:
+        con.execute("UPDATE signals SET active=CASE WHEN active=1 THEN 0 ELSE 1 END WHERE id=?", (signal_id,))
+    return redirect(url_for("manager_signals"))
 
 @app.route("/trade")
 def trade():
@@ -340,7 +419,7 @@ def manager_dashboard():
         f"<tr><td>{d[0]}</td><td>{d[1]}</td><td>{d[2]}</td><td>KSh {d[3]:,.2f}</td><td>{d[4]}</td><td>{d[5] or '-'}</td><td>{d[6]}</td></tr>"
         for d in deposits
     )
-    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Manager</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa;color:#111}}header{{background:#111;color:white;padding:18px 5%;display:flex;justify-content:space-between}}main{{padding:24px 5%}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}}.card{{background:white;padding:18px;border-radius:12px;box-shadow:0 2px 10px #0001}}table{{width:100%;border-collapse:collapse;background:white;margin-top:20px;font-size:13px}}th,td{{padding:10px;border-bottom:1px solid #eee;text-align:left}}.tablewrap{{overflow:auto}}a{{color:white}}</style></head><body><header><b>TRADEON MANAGER</b><a href="/manager/logout">Logout</a></header><main><p><a href="/manager/users" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">👥 Manage Users</a></p><p><a href="/manager/signals" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">📈 Signals</a></p><h2>Dashboard</h2><div class="cards"><div class="card"><b>Users</b><h2>{users}</h2></div><div class="card"><b>Verified</b><h2>{verified}</h2></div><div class="card"><b>Pending deposits</b><h2>{pending}</h2></div><div class="card"><b>Successful deposits</b><h2>KSh {successful:,.2f}</h2></div></div><h2>Recent deposits</h2><div class="tablewrap"><table><tr><th>ID</th><th>User</th><th>Phone</th><th>Amount</th><th>Status</th><th>Receipt</th><th>Date</th></tr>{rows or "<tr><td colspan='7'>No deposits yet.</td></tr>"}</table></div></main></body></html>"""
+    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Manager</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa;color:#111}}header{{background:#111;color:white;padding:18px 5%;display:flex;justify-content:space-between}}main{{padding:24px 5%}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}}.card{{background:white;padding:18px;border-radius:12px;box-shadow:0 2px 10px #0001}}table{{width:100%;border-collapse:collapse;background:white;margin-top:20px;font-size:13px}}th,td{{padding:10px;border-bottom:1px solid #eee;text-align:left}}.tablewrap{{overflow:auto}}a{{color:white}}</style></head><body><header><b>TRADEON MANAGER</b><a href="/manager/logout">Logout</a></header><main><p><a href="/manager/users" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">👥 Manage Users</a></p><p><a href="/manager/signals" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">📈 Create & Manage Signals</a></p><h2>Dashboard</h2><div class="cards"><div class="card"><b>Users</b><h2>{users}</h2></div><div class="card"><b>Verified</b><h2>{verified}</h2></div><div class="card"><b>Pending deposits</b><h2>{pending}</h2></div><div class="card"><b>Successful deposits</b><h2>KSh {successful:,.2f}</h2></div></div><h2>Recent deposits</h2><div class="tablewrap"><table><tr><th>ID</th><th>User</th><th>Phone</th><th>Amount</th><th>Status</th><th>Receipt</th><th>Date</th></tr>{rows or "<tr><td colspan='7'>No deposits yet.</td></tr>"}</table></div></main></body></html>"""
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
