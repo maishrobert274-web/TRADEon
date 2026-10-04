@@ -42,7 +42,7 @@ main{max-width:700px;margin:auto;padding:12px 12px 85px}
 
 <section class="signal"><b>📈 Latest Signal</b><p style="margin-bottom:8px">Manager signals appear here.</p><a href="/signals">View all signals →</a></section>
 </main>
-<nav class="bottom"><a href="/"><b>⌂</b>Home</a><a href="/trade"><b>⇄</b>Trade</a><a href="/deposit"><b>＋</b>Deposit</a><a href="/signals"><b>◈</b>Signals</a></nav>
+<nav class="bottom"><a href="/"><b>⌂</b>Home</a><a href="/trades"><b>⇄</b>Trades</a><a href="/deposit"><b>＋</b>Deposit</a><a href="/signals"><b>◈</b>Signals</a></nav>
 <script>
 function setAmount(v){document.getElementById('amount').value=v}
 let currentSymbol='BTCUSDT';
@@ -71,10 +71,18 @@ async function loadPrice(){
 }
 loadPrice();
 setInterval(loadPrice,15000);
-function trade(side){
- const amount=document.getElementById('amount').value;
- if(!amount||Number(amount)<10){alert('Enter at least KSh 10.');return}
- alert(side+' order selected for '+document.getElementById('pair').textContent+' — KSh '+amount+'. Trade execution will be connected next.');
+async function trade(side){
+ const amount=Number(document.getElementById('amount').value);
+ if(!amount||amount<10){alert('Enter at least KSh 10.');return}
+ try{
+  const response=await fetch('/api/trade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pair:document.getElementById('pair').textContent,side:side,amount:amount})});
+  const data=await response.json();
+  if(!response.ok){alert(data.error||'Trade could not be opened.');return}
+  alert(side+' trade opened for KSh '+amount.toFixed(2)+' at 
+</script>
+</body></html>+Number(data.entry_price).toLocaleString());
+  window.location.href='/trades';
+ }catch(e){alert('Unable to open trade right now.');}
 }
 </script>
 </body></html>
