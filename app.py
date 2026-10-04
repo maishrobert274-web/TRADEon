@@ -262,3 +262,43 @@ def how_to_trade():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
+
+
+# ---------------- TRADEON MANAGER (ADMIN) ----------------
+def admin_required():
+    return session.get("admin_logged_in") is True
+
+@app.route("/manager/login", methods=["GET", "POST"])
+def manager_login():
+    error = None
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        admin_username = os.environ.get("ADMIN_USERNAME", "admin")
+        admin_password = os.environ.get("ADMIN_PASSWORD")
+        if admin_password and username == admin_username and password == admin_password:
+            session["admin_logged_in"] = True
+            return redirect(url_for("manager_dashboard"))
+        error = "Invalid manager login."
+    return render_template("manager_login.html", error=error)
+
+@app.route("/manager/logout")
+def manager_logout():
+    session.pop("admin_logged_in", None)
+    return redirect(url_for("manager_login"))
+
+@app.route("/manager")
+def manager_dashboard():
+    if not admin_required():
+        return redirect(url_for("manager_login"))
+    with sqlite3.connect(DB) as con:
+        users = con.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        verified = con.execute("SELECT COUNT(*) FROM users WHERE verified=1").fetchone()[0]
+        pending = con.execute("SELECT COUNT(*) FROM deposits WHERE status='PENDING'").fetchone()[0]
+        successful = con.execute("SELECT COALESCE(SUM(amount),0) FROM deposits WHERE status='SUCCESS'").fetchone()[0]
+        deposits = con.execute("""
+            SELECT d.id, u.name, d.phone, d.amount, d.status, d.mpesa_receipt, d.created_at
+            FROM deposits d JOIN users u ON u.id=d.user_id
+            ORDER BY d.id DESC LIMIT 50
+        """).fetchall()
+    return render_template("manager.html", users=users, verified=verified, pending=pending, successful=successful, deposits=deposits)
