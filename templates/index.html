@@ -1,27 +1,55 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TRADEON Kenya</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TRADEon — Trading</title>
 <style>
-*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f5f7fb;color:#172033}
-header{background:#101828;color:white;padding:18px 20px;display:flex;justify-content:space-between;align-items:center}
-.logo{font-size:24px;font-weight:800}.country{font-size:13px;opacity:.8}main{max-width:900px;margin:auto;padding:22px}
-.hero,.card{background:#fff;border-radius:18px;padding:22px;box-shadow:0 5px 20px #0000000d;margin-bottom:16px}
-h1{margin:0 0 8px;font-size:30px}.muted{color:#667085}.balance{font-size:34px;font-weight:800;margin:18px 0}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:18px}
-button,a.btn{border:0;border-radius:12px;padding:14px 10px;font-weight:700;font-size:15px;cursor:pointer;text-decoration:none;text-align:center}
-.primary{background:#12b76a;color:white}.secondary{background:#eef2f6;color:#172033}
-.top{display:flex;justify-content:space-between;align-items:center;gap:10px}.logout{color:white;text-decoration:none;background:#344054;padding:9px 12px;border-radius:9px}
-.row{display:flex;justify-content:space-between;padding:13px 0;border-bottom:1px solid #eaecf0}.row:last-child{border-bottom:0}
-@media(max-width:600px){.grid{grid-template-columns:1fr}.balance{font-size:28px}}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f6f8;color:#182230}
+header{background:#101828;color:#fff;padding:15px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+.logo{font-size:22px;font-weight:900}.right{display:flex;align-items:center;gap:10px}.pill{font-size:12px;background:#263449;padding:7px 10px;border-radius:20px}.logout{color:#fff;text-decoration:none;font-size:12px}
+main{max-width:700px;margin:auto;padding:12px 12px 85px}
+.balance{background:#fff;border-radius:14px;padding:16px;margin-bottom:12px}.muted{color:#667085;font-size:13px}.amount{font-size:29px;font-weight:900;margin-top:5px}
+.market{background:#fff;border-radius:14px;padding:15px;margin-bottom:12px}.markettop{display:flex;justify-content:space-between;align-items:center}.pair{font-size:19px;font-weight:800}.price{font-size:25px;font-weight:900;margin:12px 0 2px}.up{color:#12b76a}.down{color:#f04438}
+.chart{height:190px;border-radius:10px;background:linear-gradient(180deg,#f8fafc,#eef2f6);position:relative;overflow:hidden;margin-top:12px}
+.chart svg{width:100%;height:100%}.tabs{display:flex;gap:8px;margin-bottom:12px;overflow:auto}.tab{background:#e9eef3;border:0;border-radius:9px;padding:9px 14px;font-weight:700;white-space:nowrap}.tab.active{background:#101828;color:#fff}
+.tradebox{background:#fff;border-radius:14px;padding:15px}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.buy,.sell{border:0;border-radius:11px;padding:15px;font-weight:900;font-size:17px;color:#fff}.buy{background:#12b76a}.sell{background:#f04438}
+.amounts{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:12px 0}.amt{border:1px solid #d0d5dd;background:#fff;border-radius:9px;padding:10px;font-weight:700}.custom{width:100%;padding:12px;border:1px solid #d0d5dd;border-radius:9px}
+.signal{background:#101828;color:#fff;border-radius:14px;padding:15px;margin-top:12px}.signal a{color:#fff}.bottom{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #ddd;display:grid;grid-template-columns:repeat(4,1fr);padding:9px 5px;z-index:20}.bottom a{text-decoration:none;color:#475467;text-align:center;font-size:11px;font-weight:700}.bottom b{display:block;font-size:19px;margin-bottom:3px;color:#101828}
+@media(min-width:700px){main{padding-top:20px}.chart{height:240px}}
 </style>
 </head>
 <body>
-<header><div class="logo">TRADEON</div><div class="top"><div class="country">🇰🇪 Kenya • KSh</div><a class="logout" href="/logout">Logout</a></div></header>
+<header><div class="logo">TRADEON</div><div class="right"><span class="pill">🇰🇪 KSh</span><a class="logout" href="/logout">Logout</a></div></header>
 <main>
-<section class="hero"><div class="muted">Welcome, {{ user_name }}</div><h1>Your TRADEON Dashboard</h1>
-<div class="balance">KSh 0.00</div><div class="muted">Available balance</div>
-<div class="grid"><a class="btn primary" href="/deposit">Deposit KSh</a><button class="secondary" onclick="alert('Withdrawal will be added after payment integration.')">Withdraw KSh</button><a class="btn secondary" href="/trade">Start Trading</a></div></section>
-<section class="card"><h2>Recent activity</h2><div class="row"><span>Account</span><strong>Active</strong></div><div class="row"><span>Balance</span><strong>KSh 0.00</strong></div></section>
-</main></body></html>
+<section class="balance"><div class="muted">Welcome, {{ user_name }}</div><div class="amount">KSh 0.00</div><div class="muted">Available balance</div></section>
+
+<div class="tabs"><button class="tab active" onclick="setPair('BTC/USDT', '67,420.00')">BTC/USDT</button><button class="tab" onclick="setPair('ETH/USDT','2,480.00')">ETH/USDT</button><button class="tab" onclick="setPair('SOL/USDT','154.20')">SOL/USDT</button></div>
+
+<section class="market">
+<div class="markettop"><span class="pair" id="pair">BTC/USDT</span><span class="up" id="change">+1.42%</span></div>
+<div class="price" id="price">$67,420.00</div><div class="muted">Market price</div>
+<div class="chart"><svg viewBox="0 0 700 240" preserveAspectRatio="none"><polyline points="0,190 60,175 120,185 180,130 240,145 300,95 360,120 420,70 480,88 540,45 600,65 700,25" fill="none" stroke="#12b76a" stroke-width="5"/><polyline points="0,220 700,220" fill="none" stroke="#d0d5dd" stroke-width="2"/></svg></div>
+</section>
+
+<section class="tradebox">
+<h3 style="margin-top:0">Trade</h3>
+<div class="muted">Choose amount</div>
+<div class="amounts"><button class="amt" onclick="setAmount(100)">KSh 100</button><button class="amt" onclick="setAmount(500)">KSh 500</button><button class="amt" onclick="setAmount(1000)">KSh 1K</button><button class="amt" onclick="setAmount(5000)">KSh 5K</button></div>
+<input id="amount" class="custom" type="number" min="10" placeholder="Enter amount in KSh">
+<div class="actions" style="margin-top:12px"><button class="buy" onclick="trade('BUY')">BUY</button><button class="sell" onclick="trade('SELL')">SELL</button></div>
+</section>
+
+<section class="signal"><b>📈 Latest Signal</b><p style="margin-bottom:8px">Manager signals appear here.</p><a href="/signals">View all signals →</a></section>
+</main>
+<nav class="bottom"><a href="/"><b>⌂</b>Home</a><a href="/trade"><b>⇄</b>Trade</a><a href="/deposit"><b>＋</b>Deposit</a><a href="/signals"><b>◈</b>Signals</a></nav>
+<script>
+function setAmount(v){document.getElementById('amount').value=v}
+function setPair(pair,price){document.getElementById('pair').textContent=pair;document.getElementById('price').textContent='$'+price}
+function trade(side){
+ const amount=document.getElementById('amount').value;
+ if(!amount||Number(amount)<10){alert('Enter at least KSh 10.');return}
+ alert(side+' order selected for '+document.getElementById('pair').textContent+' — KSh '+amount+'. Live order execution will be connected next.')
+}
+</script>
+</body></html>
