@@ -79,18 +79,15 @@ def register():
                         (name, phone, generate_password_hash(password))
                     )
                     user_id = cur.lastrowid
-                otp = str(random.randint(100000, 999999))
-                session["verify_user_id"] = user_id
-                session["verify_otp_hash"] = generate_password_hash(otp)
-                session["verify_expires"] = time.time() + 300
-                if send_otp(phone, otp):
-                    return redirect(url_for("verify_phone"))
+                # Phone verification is disabled for simple registration.
+                # The phone number is used as the account login identifier.
                 with sqlite3.connect(DB) as con:
-                    con.execute("DELETE FROM users WHERE id=?", (user_id,))
-                session.pop("verify_user_id", None)
-                session.pop("verify_otp_hash", None)
-                session.pop("verify_expires", None)
-                error = "SMS could not be sent. SMS service credentials must be configured first."
+                    con.execute("UPDATE users SET verified=1 WHERE id=?", (user_id,))
+                    con.execute("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)", (user_id,))
+                    user = con.execute("SELECT id,name FROM users WHERE id=?", (user_id,)).fetchone()
+                session["user_id"] = user[0]
+                session["user_name"] = user[1]
+                return redirect(url_for("home"))
             except sqlite3.IntegrityError:
                 error = "That phone number is already registered."
     return render_template("register.html", error=error)
@@ -134,9 +131,6 @@ def login():
                 (phone,)
             ).fetchone()
         if user and check_password_hash(user[2], password):
-            if not user[3]:
-                session["verify_user_id"] = user[0]
-                return redirect(url_for("verify_phone"))
             session["user_id"] = user[0]
             session["user_name"] = user[1]
             return redirect(url_for("home"))
