@@ -282,6 +282,32 @@ def manager_logout():
     session.pop("admin_logged_in", None)
     return redirect(url_for("manager_login"))
 
+@app.route("/manager/users")
+def manager_users():
+    if not admin_required():
+        return redirect(url_for("manager_login"))
+    q = request.args.get("q", "").strip()
+    with sqlite3.connect(DB) as con:
+        like = "%" + q + "%"
+        if q:
+            users = con.execute("""SELECT u.id,u.name,u.phone,u.verified,COALESCE(w.balance,0),(SELECT COUNT(*) FROM deposits d WHERE d.user_id=u.id),(SELECT COALESCE(SUM(d.amount),0) FROM deposits d WHERE d.user_id=u.id AND d.status='SUCCESS') FROM users u LEFT JOIN wallets w ON w.user_id=u.id WHERE u.name LIKE ? OR u.phone LIKE ? ORDER BY u.id DESC""",(like,like)).fetchall()
+        else:
+            users = con.execute("""SELECT u.id,u.name,u.phone,u.verified,COALESCE(w.balance,0),(SELECT COUNT(*) FROM deposits d WHERE d.user_id=u.id),(SELECT COALESCE(SUM(d.amount),0) FROM deposits d WHERE d.user_id=u.id AND d.status='SUCCESS') FROM users u LEFT JOIN wallets w ON w.user_id=u.id ORDER BY u.id DESC""").fetchall()
+    rows="".join(f"<tr><td>{u[0]}</td><td>{u[1]}</td><td>{u[2]}</td><td>{'Verified' if u[3] else 'Unverified'}</td><td>KSh {u[4]:,.2f}</td><td>{u[5]}</td><td>KSh {u[6]:,.2f}</td><td><a href='/manager/users/{u[0]}'>View</a></td></tr>" for u in users)
+    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Users</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa}}header{{background:#111;color:white;padding:18px 5%}}main{{padding:24px 5%}}input,button{{padding:12px;border-radius:8px;border:1px solid #ccc}}button{{background:#111;color:white}}.wrap{{overflow:auto}}table{{width:100%;min-width:800px;border-collapse:collapse;background:white}}th,td{{padding:10px;border-bottom:1px solid #eee;text-align:left;font-size:13px}}a{{background:#111;color:white;padding:7px 10px;border-radius:7px;text-decoration:none}}</style></head><body><header><b>TRADEON MANAGER — USERS</b> &nbsp; <a href="/manager">Dashboard</a></header><main><h2>Users Management</h2><form method="get"><input name="q" value="{q}" placeholder="Search name or phone"><button>Search</button></form><p>{len(users)} user(s) found.</p><div class="wrap"><table><tr><th>ID</th><th>Name</th><th>Phone</th><th>Verification</th><th>Wallet</th><th>Deposits</th><th>Total deposited</th><th>Action</th></tr>{rows or "<tr><td colspan='8'>No users found.</td></tr>"}</table></div></main></body></html>"""
+
+@app.route("/manager/users/<int:user_id>")
+def manager_user_detail(user_id):
+    if not admin_required():
+        return redirect(url_for("manager_login"))
+    with sqlite3.connect(DB) as con:
+        user=con.execute("SELECT id,name,phone,verified FROM users WHERE id=?",(user_id,)).fetchone()
+        wallet=con.execute("SELECT COALESCE(balance,0) FROM wallets WHERE user_id=?",(user_id,)).fetchone()
+        deposits=con.execute("SELECT id,amount,status,mpesa_receipt,created_at FROM deposits WHERE user_id=? ORDER BY id DESC LIMIT 50",(user_id,)).fetchall()
+    if not user: return "User not found",404
+    rows="".join(f"<tr><td>{d[0]}</td><td>KSh {d[1]:,.2f}</td><td>{d[2]}</td><td>{d[3] or '-'}</td><td>{d[4]}</td></tr>" for d in deposits)
+    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>User details</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa}}header{{background:#111;color:white;padding:18px 5%}}main{{padding:24px 5%}}.card{{background:white;padding:18px;border-radius:12px;margin-bottom:18px}}table{{width:100%;border-collapse:collapse;background:white}}th,td{{padding:10px;border-bottom:1px solid #eee;text-align:left;font-size:13px}}a{{color:white}}</style></head><body><header><b>TRADEON MANAGER — USER DETAILS</b> &nbsp; <a href="/manager/users">Users</a></header><main><div class="card"><h2>{user[1]}</h2><p>User ID: {user[0]}</p><p>Phone: {user[2]}</p><p>Verification: {'Verified' if user[3] else 'Unverified'}</p><p>Wallet balance: KSh {(wallet[0] if wallet else 0):,.2f}</p></div><h2>Deposit history</h2><table><tr><th>ID</th><th>Amount</th><th>Status</th><th>Receipt</th><th>Date</th></tr>{rows or "<tr><td colspan='5'>No deposits yet.</td></tr>"}</table></main></body></html>"""
+
 @app.route("/manager")
 def manager_dashboard():
     if not admin_required():
@@ -300,7 +326,7 @@ def manager_dashboard():
         f"<tr><td>{d[0]}</td><td>{d[1]}</td><td>{d[2]}</td><td>KSh {d[3]:,.2f}</td><td>{d[4]}</td><td>{d[5] or '-'}</td><td>{d[6]}</td></tr>"
         for d in deposits
     )
-    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Manager</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa;color:#111}}header{{background:#111;color:white;padding:18px 5%;display:flex;justify-content:space-between}}main{{padding:24px 5%}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}}.card{{background:white;padding:18px;border-radius:12px;box-shadow:0 2px 10px #0001}}table{{width:100%;border-collapse:collapse;background:white;margin-top:20px;font-size:13px}}th,td{{padding:10px;border-bottom:1px solid #eee;text-align:left}}.tablewrap{{overflow:auto}}a{{color:white}}</style></head><body><header><b>TRADEON MANAGER</b><a href="/manager/logout">Logout</a></header><main><h2>Dashboard</h2><div class="cards"><div class="card"><b>Users</b><h2>{users}</h2></div><div class="card"><b>Verified</b><h2>{verified}</h2></div><div class="card"><b>Pending deposits</b><h2>{pending}</h2></div><div class="card"><b>Successful deposits</b><h2>KSh {successful:,.2f}</h2></div></div><h2>Recent deposits</h2><div class="tablewrap"><table><tr><th>ID</th><th>User</th><th>Phone</th><th>Amount</th><th>Status</th><th>Receipt</th><th>Date</th></tr>{rows or "<tr><td colspan='7'>No deposits yet.</td></tr>"}</table></div></main></body></html>"""
+    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Manager</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa;color:#111}}header{{background:#111;color:white;padding:18px 5%;display:flex;justify-content:space-between}}main{{padding:24px 5%}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}}.card{{background:white;padding:18px;border-radius:12px;box-shadow:0 2px 10px #0001}}table{{width:100%;border-collapse:collapse;background:white;margin-top:20px;font-size:13px}}th,td{{padding:10px;border-bottom:1px solid #eee;text-align:left}}.tablewrap{{overflow:auto}}a{{color:white}}</style></head><body><header><b>TRADEON MANAGER</b><a href="/manager/logout">Logout</a></header><main><p><a href="/manager/users" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">👥 Manage Users</a></p><h2>Dashboard</h2><div class="cards"><div class="card"><b>Users</b><h2>{users}</h2></div><div class="card"><b>Verified</b><h2>{verified}</h2></div><div class="card"><b>Pending deposits</b><h2>{pending}</h2></div><div class="card"><b>Successful deposits</b><h2>KSh {successful:,.2f}</h2></div></div><h2>Recent deposits</h2><div class="tablewrap"><table><tr><th>ID</th><th>User</th><th>Phone</th><th>Amount</th><th>Status</th><th>Receipt</th><th>Date</th></tr>{rows or "<tr><td colspan='7'>No deposits yet.</td></tr>"}</table></div></main></body></html>"""
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
