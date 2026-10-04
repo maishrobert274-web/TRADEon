@@ -24,11 +24,11 @@ main{max-width:700px;margin:auto;padding:12px 12px 85px}
 <main>
 <section class="balance"><div class="muted">Welcome, {{ user_name }}</div><div class="amount">KSh 0.00</div><div class="muted">Available balance</div></section>
 
-<div class="tabs"><button class="tab active" onclick="setPair('BTC/USDT', '67,420.00')">BTC/USDT</button><button class="tab" onclick="setPair('ETH/USDT','2,480.00')">ETH/USDT</button><button class="tab" onclick="setPair('SOL/USDT','154.20')">SOL/USDT</button></div>
+<div class="tabs"><button class="tab active" onclick="setPair('BTC/USDT','BTCUSDT')">BTC/USDT</button><button class="tab" onclick="setPair('ETH/USDT','ETHUSDT')">ETH/USDT</button><button class="tab" onclick="setPair('SOL/USDT','SOLUSDT')">SOL/USDT</button></div>
 
 <section class="market">
-<div class="markettop"><span class="pair" id="pair">BTC/USDT</span><span class="up" id="change">+1.42%</span></div>
-<div class="price" id="price">$67,420.00</div><div class="muted">Market price</div>
+<div class="markettop"><span class="pair" id="pair">BTC/USDT</span><span class="up" id="change">--</span></div>
+<div class="price" id="price">Loading...</div><div class="muted" id="marketStatus">Live market price</div>
 <div class="chart"><svg viewBox="0 0 700 240" preserveAspectRatio="none"><polyline points="0,190 60,175 120,185 180,130 240,145 300,95 360,120 420,70 480,88 540,45 600,65 700,25" fill="none" stroke="#12b76a" stroke-width="5"/><polyline points="0,220 700,220" fill="none" stroke="#d0d5dd" stroke-width="2"/></svg></div>
 </section>
 
@@ -45,11 +45,36 @@ main{max-width:700px;margin:auto;padding:12px 12px 85px}
 <nav class="bottom"><a href="/"><b>⌂</b>Home</a><a href="/trade"><b>⇄</b>Trade</a><a href="/deposit"><b>＋</b>Deposit</a><a href="/signals"><b>◈</b>Signals</a></nav>
 <script>
 function setAmount(v){document.getElementById('amount').value=v}
-function setPair(pair,price){document.getElementById('pair').textContent=pair;document.getElementById('price').textContent='$'+price}
+let currentSymbol='BTCUSDT';
+function setPair(pair,symbol){
+ currentSymbol=symbol;
+ document.getElementById('pair').textContent=pair;
+ loadPrice();
+}
+async function loadPrice(){
+ try{
+  const response=await fetch('/api/market?symbol='+currentSymbol);
+  const data=await response.json();
+  if(!response.ok) throw new Error(data.error||'Unavailable');
+  document.getElementById('price').textContent='
+</script>
+</body></html>+Number(data.price).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:8});
+  const change=Number(data.change_percent);
+  const el=document.getElementById('change');
+  el.textContent=(change>=0?'+':'')+change.toFixed(2)+'%';
+  el.className=change>=0?'up':'down';
+  document.getElementById('marketStatus').textContent='Live market price • updated just now';
+ }catch(e){
+  document.getElementById('price').textContent='Unavailable';
+  document.getElementById('marketStatus').textContent='Market data temporarily unavailable';
+ }
+}
+loadPrice();
+setInterval(loadPrice,15000);
 function trade(side){
  const amount=document.getElementById('amount').value;
  if(!amount||Number(amount)<10){alert('Enter at least KSh 10.');return}
- alert(side+' order selected for '+document.getElementById('pair').textContent+' — KSh '+amount+'. Live order execution will be connected next.')
+ alert(side+' order selected for '+document.getElementById('pair').textContent+' — KSh '+amount+'. Trade execution will be connected next.');
 }
 </script>
 </body></html>
