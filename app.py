@@ -235,6 +235,20 @@ def mpesa_callback():
                     con.execute("UPDATE deposits SET status='FAILED' WHERE id=?", (row[0],))
     return {"ResultCode": 0, "ResultDesc": "Accepted"}
 
+@app.route("/signals")
+def signals():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    signals = [("BTC/USDT","BUY","Watch for bullish confirmation","Medium"),("ETH/USDT","SELL","Watch for bearish confirmation","Medium"),("SOL/USDT","BUY","Momentum setup","Low")]
+    cards = "".join(f"<div class='card'><h2>{s[0]}</h2><p class='{s[1].lower()}'>{s[1]}</p><p>{s[2]}</p><b>Strength: {s[3]}</b></div>" for s in signals)
+    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Signals</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa}}header{{background:#111;color:white;padding:18px 5%}}main{{padding:24px 5%}}.card{{background:white;padding:18px;border-radius:12px;margin:12px 0}}.buy{{color:green;font-size:24px;font-weight:bold}}.sell{{color:#c00;font-size:24px;font-weight:bold}}a{{color:white}}</style></head><body><header><b>TRADEON — SIGNALS</b> &nbsp; <a href="/">Dashboard</a></header><main><h1>Trading Signals</h1><p>Demo signals for development. These are not financial advice.</p>{cards}</main></body></html>"""
+
+@app.route("/manager/signals")
+def manager_signals():
+    if not admin_required():
+        return redirect(url_for("manager_login"))
+    return redirect(url_for("signals"))
+
 @app.route("/trade")
 def trade():
     if "user_id" not in session: return redirect(url_for("login"))
@@ -326,7 +340,7 @@ def manager_dashboard():
         f"<tr><td>{d[0]}</td><td>{d[1]}</td><td>{d[2]}</td><td>KSh {d[3]:,.2f}</td><td>{d[4]}</td><td>{d[5] or '-'}</td><td>{d[6]}</td></tr>"
         for d in deposits
     )
-    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Manager</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa;color:#111}}header{{background:#111;color:white;padding:18px 5%;display:flex;justify-content:space-between}}main{{padding:24px 5%}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}}.card{{background:white;padding:18px;border-radius:12px;box-shadow:0 2px 10px #0001}}table{{width:100%;border-collapse:collapse;background:white;margin-top:20px;font-size:13px}}th,td{{padding:10px;border-bottom:1px solid #eee;text-align:left}}.tablewrap{{overflow:auto}}a{{color:white}}</style></head><body><header><b>TRADEON MANAGER</b><a href="/manager/logout">Logout</a></header><main><p><a href="/manager/users" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">👥 Manage Users</a></p><h2>Dashboard</h2><div class="cards"><div class="card"><b>Users</b><h2>{users}</h2></div><div class="card"><b>Verified</b><h2>{verified}</h2></div><div class="card"><b>Pending deposits</b><h2>{pending}</h2></div><div class="card"><b>Successful deposits</b><h2>KSh {successful:,.2f}</h2></div></div><h2>Recent deposits</h2><div class="tablewrap"><table><tr><th>ID</th><th>User</th><th>Phone</th><th>Amount</th><th>Status</th><th>Receipt</th><th>Date</th></tr>{rows or "<tr><td colspan='7'>No deposits yet.</td></tr>"}</table></div></main></body></html>"""
+    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Manager</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa;color:#111}}header{{background:#111;color:white;padding:18px 5%;display:flex;justify-content:space-between}}main{{padding:24px 5%}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}}.card{{background:white;padding:18px;border-radius:12px;box-shadow:0 2px 10px #0001}}table{{width:100%;border-collapse:collapse;background:white;margin-top:20px;font-size:13px}}th,td{{padding:10px;border-bottom:1px solid #eee;text-align:left}}.tablewrap{{overflow:auto}}a{{color:white}}</style></head><body><header><b>TRADEON MANAGER</b><a href="/manager/logout">Logout</a></header><main><p><a href="/manager/users" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">👥 Manage Users</a></p><p><a href="/manager/signals" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">📈 Signals</a></p><h2>Dashboard</h2><div class="cards"><div class="card"><b>Users</b><h2>{users}</h2></div><div class="card"><b>Verified</b><h2>{verified}</h2></div><div class="card"><b>Pending deposits</b><h2>{pending}</h2></div><div class="card"><b>Successful deposits</b><h2>KSh {successful:,.2f}</h2></div></div><h2>Recent deposits</h2><div class="tablewrap"><table><tr><th>ID</th><th>User</th><th>Phone</th><th>Amount</th><th>Status</th><th>Receipt</th><th>Date</th></tr>{rows or "<tr><td colspan='7'>No deposits yet.</td></tr>"}</table></div></main></body></html>"""
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
