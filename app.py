@@ -236,6 +236,30 @@ def mpesa_callback():
                     con.execute("UPDATE deposits SET status='FAILED' WHERE id=?", (row[0],))
     return {"ResultCode": 0, "ResultDesc": "Accepted"}
 
+@app.route("/api/market")
+def market_price():
+    if "user_id" not in session:
+        return {"error": "login required"}, 401
+    symbol = request.args.get("symbol", "BTCUSDT").upper()
+    allowed = {"BTCUSDT", "ETHUSDT", "SOLUSDT"}
+    if symbol not in allowed:
+        return {"error": "unsupported symbol"}, 400
+    try:
+        response = requests.get(
+            "https://api.binance.com/api/v3/ticker/24hr",
+            params={"symbol": symbol},
+            timeout=10
+        )
+        response.raise_for_status()
+        data = response.json()
+        return {
+            "symbol": symbol,
+            "price": float(data["lastPrice"]),
+            "change_percent": float(data["priceChangePercent"])
+        }
+    except (requests.RequestException, KeyError, ValueError):
+        return {"error": "market data temporarily unavailable"}, 503
+
 @app.route("/signals")
 def signals():
     if "user_id" not in session:
