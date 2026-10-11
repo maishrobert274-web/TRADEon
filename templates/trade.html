@@ -22,13 +22,16 @@
 }
 
 
-/* Keep Wallet and Profile prominent at the very top on phones */
+/* Clear, easy-to-see account buttons directly under the TRADEON name on phones */
 @media(max-width:800px){
- .top{height:auto;min-height:44px;align-items:center;gap:6px;padding:6px 8px}
- .top>div:last-child{display:flex!important;flex-direction:column;align-items:flex-end!important;gap:4px!important}
- .top .navlinks{order:0;display:flex;gap:5px}
- .top .balance{order:1}
- .top .account-btn{padding:7px 10px;min-height:32px;font-size:11px}
+ .top{height:auto;min-height:0;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:10px 10px;background:#151a21}
+ .top>.brand{width:100%;font-size:21px;line-height:1.2}
+ .top>div:last-child{width:100%;display:flex!important;flex-direction:row!important;align-items:center!important;justify-content:space-between!important;gap:8px!important;flex-wrap:nowrap!important}
+ .top .navlinks{order:0;display:flex;gap:8px;align-items:center;flex:1}
+ .top .account-btn{padding:11px 15px;min-height:42px;font-size:14px;border-radius:9px;box-shadow:0 0 0 1px #ffffff10;font-weight:900}
+ .top .wallet-btn{background:#126b4b;border:1px solid #20c997;color:#ffffff!important}
+ .top .profile-btn{background:#303b48;border:1px solid #728096;color:#ffffff!important}
+ .top .balance{order:1;white-space:nowrap;padding:9px 8px;font-size:11px}
 }
 
 </style>
