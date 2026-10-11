@@ -210,6 +210,10 @@ def api_trade():
         duration = int(data.get("duration_seconds", 0))
     except (TypeError, ValueError):
         amount, duration = 0, 0
+    if mode == "DURATION" and duration == 0:
+        with sqlite3.connect(DB) as settings_con:
+            setting = settings_con.execute("SELECT value FROM app_settings WHERE key='demo_default_duration'").fetchone()
+            duration = int(setting[0]) if setting else 15
     symbols = {"BTC/USDT": "BTCUSDT", "ETH/USDT": "ETHUSDT", "SOL/USDT": "SOLUSDT"}
     allowed_sides = ("UP", "DOWN") if mode == "DURATION" else ("BUY", "SELL")
     if pair not in symbols or side not in allowed_sides or amount < 10 or mode not in ("SPOT", "DURATION"):
