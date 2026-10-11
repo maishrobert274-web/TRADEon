@@ -806,15 +806,48 @@ async function closeAllTrades(){{
 </script><nav class="bottom-nav" aria-label="Main sections"><a href="/trades"><span>↔</span>Trades</a><a href="/signals"><span>◈</span>Insights</a><a href="/trade"><span>⌁</span>Buy/Sell</a><a href="/social-trading"><span>◎</span>Social Trading</a><a href="/deposit"><span>＋</span>Deposit</a></nav></body></html>"""
 
 
+@app.route("/wallet")
+def wallet():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    with sqlite3.connect(DB) as con:
+        con.execute("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)", (session["user_id"],))
+        balance = con.execute("SELECT balance FROM wallets WHERE user_id=?", (session["user_id"],)).fetchone()[0]
+        deposits = con.execute(
+            "SELECT amount,status,created_at,COALESCE(mpesa_receipt,'') FROM deposits WHERE user_id=? ORDER BY id DESC LIMIT 50",
+            (session["user_id"],)
+        ).fetchall()
+        adjustments = con.execute(
+            "SELECT transaction_type,amount,balance_after,reason,created_at FROM wallet_transactions WHERE user_id=? ORDER BY id DESC LIMIT 50",
+            (session["user_id"],)
+        ).fetchall()
+        user = con.execute("SELECT name,phone,country FROM users WHERE id=?", (session["user_id"],)).fetchone()
+    return render_template("wallet.html", balance=balance, deposits=deposits, adjustments=adjustments, user_name=user[0] if user else "", phone=user[1] if user else "", country=user[2] if user else "Kenya")
+
 @app.route("/transactions")
 def transactions():
-    if "user_id" not in session: return redirect(url_for("login"))
-    return render_template("simple_page.html", title="Transactions", message="Your transaction history will appear here.")
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    return redirect(url_for("wallet"))
 
-@app.route("/profile")
+@app.route("/profile", methods=["GET", "POST"])
 def profile():
-    if "user_id" not in session: return redirect(url_for("login"))
-    return render_template("simple_page.html", title="Profile", message="Your TRADEON profile will appear here.")
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    message = None
+    error = None
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        if not name or len(name) > 80:
+            error = "Enter a name between 1 and 80 characters."
+        else:
+            with sqlite3.connect(DB) as con:
+                con.execute("UPDATE users SET name=? WHERE id=?", (name, session["user_id"]))
+            session["user_name"] = name
+            message = "Profile updated."
+    with sqlite3.connect(DB) as con:
+        user = con.execute("SELECT name,phone,country FROM users WHERE id=?", (session["user_id"],)).fetchone()
+    return render_template("profile.html", user_name=user[0], phone=user[1], country=user[2], message=message, error=error)
 
 @app.route("/refer")
 def refer():
