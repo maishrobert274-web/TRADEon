@@ -348,7 +348,7 @@ def settle_due_demo_trades():
                 continue
             entry_price, amount = float(row[4]), float(row[3])
             won = (row[2] == "BUY" and exit_price > entry_price) or (row[2] == "SELL" and exit_price < entry_price)
-            pnl = round(amount * 0.8, 2) if won else -round(amount, 2)
+            pnl = round(amount * 0.2, 2) if won else -round(amount, 2)
             con.execute("UPDATE trades SET status='CLOSED',pnl=?,closed_at=CURRENT_TIMESTAMP,settlement_price=? WHERE id=? AND user_id=? AND status='OPEN'", (pnl, exit_price, row[0], session["user_id"]))
             con.execute("UPDATE demo_wallets SET balance=balance+? WHERE user_id=?", (amount + pnl if won else 0, session["user_id"]))
             results.append({"trade_id": row[0], "won": won, "pnl": pnl, "exit_price": exit_price})
