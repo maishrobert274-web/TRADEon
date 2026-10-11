@@ -21,6 +21,16 @@
   .timeframes{display:flex!important}
 }
 
+
+/* Keep Wallet and Profile prominent at the very top on phones */
+@media(max-width:800px){
+ .top{height:auto;min-height:44px;align-items:center;gap:6px;padding:6px 8px}
+ .top>div:last-child{display:flex!important;flex-direction:column;align-items:flex-end!important;gap:4px!important}
+ .top .navlinks{order:0;display:flex;gap:5px}
+ .top .balance{order:1}
+ .top .account-btn{padding:7px 10px;min-height:32px;font-size:11px}
+}
+
 </style>
 </head>
 <body>
