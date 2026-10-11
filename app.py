@@ -285,23 +285,29 @@ MARKET_CACHE_SECONDS = 15
 @app.route("/api/market/history")
 def market_history():
     symbol = request.args.get("symbol", "BTCUSDT").upper()
+    interval = request.args.get("interval", "1h").lower()
     products = {"BTCUSDT": "BTC-USD", "ETHUSDT": "ETH-USD", "SOLUSDT": "SOL-USD"}
+    granularities = {"1m": 60, "5m": 300, "15m": 900, "1h": 3600, "1d": 86400}
     if symbol not in products:
         return {"error": "unsupported symbol"}, 400
+    if interval not in granularities:
+        return {"error": "unsupported interval"}, 400
     try:
         response = requests.get(
             f"https://api.exchange.coinbase.com/products/{products[symbol]}/candles",
-            params={"granularity": 3600},
+            params={"granularity": granularities[interval]},
             headers={"User-Agent": "TRADEON-price-chart"},
             timeout=(1.5, 3)
         )
         response.raise_for_status()
         candles = sorted(response.json(), key=lambda candle: candle[0])
-        # Coinbase candle rows: [time, low, high, open, close, volume]
-        points = [{"time": candle[0], "price": float(candle[4])} for candle in candles[-24:]]
+        # Coinbase rows: [time, low, high, open, close, volume]
+        points = [{"time": int(c[0]), "low": float(c[1]), "high": float(c[2]),
+                   "open": float(c[3]), "close": float(c[4]), "volume": float(c[5]),
+                   "price": float(c[4])} for c in candles[-40:]]
         if len(points) < 2:
             return {"error": "Not enough chart data yet."}, 503
-        return {"symbol": symbol, "interval": "1h", "points": points, "source": "Coinbase"}
+        return {"symbol": symbol, "interval": interval, "points": points, "source": "Coinbase"}
     except (requests.RequestException, KeyError, TypeError, ValueError):
         return {"error": "Price chart data is temporarily unavailable."}, 503
 
