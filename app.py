@@ -990,7 +990,7 @@ def manager_wallets():
         txn_rows += ("<tr><td>" + str(t[0]) + "</td><td>" + t[1] + "</td><td>" + t[2].upper() +
                      "</td><td>KSh " + format(t[3], ",.2f") + "</td><td>KSh " + format(t[4], ",.2f") +
                      "</td><td>" + t[5] + "</td><td>" + t[6] + "</td><td>" + t[7] + "</td></tr>")
-    return """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+    page = """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
     <title>TRADEON Wallets</title><style>body{font-family:Arial;background:#f4f6f8;margin:0;color:#111}
     header{background:#111;color:white;padding:18px}main{padding:18px}.wrap{overflow:auto}
     table{width:100%;min-width:900px;border-collapse:collapse;background:white;margin:12px 0 28px}
@@ -998,11 +998,16 @@ def manager_wallets():
     input,select,button{padding:8px;margin:3px;max-width:150px}button{background:#111;color:white}
     .msg{background:#e6f4ea;padding:10px}</style></head><body><header><b>TRADEON MANAGER — WALLETS & ACCESS</b>
     &nbsp; <a style="color:white" href="/manager">Dashboard</a></header><main><h2>User balances and account access</h2>
-    <p class="msg">""" + message + """</p><form method="get"><input name="q" value='""" + q + """' placeholder="Search name or phone"><button>Search</button></form>
-    <div class="wrap"><table><tr><th>ID</th><th>Name</th><th>Phone</th><th>Real balance</th><th>Status</th><th>Block reason</th><th>Manager action</th></tr>""" +
-    (user_rows or "<tr><td colspan='7'>No users found.</td></tr>") + """</table></div>
-    <h2>Recent manual balance transactions</h2><div class="wrap"><table><tr><th>ID</th><th>User</th><th>Type</th><th>Amount</th><th>Balance after</th><th>Reason</th><th>Manager</th><th>Date</th></tr>""" +
-    (txn_rows or "<tr><td colspan='8'>No manual transactions yet.</td></tr>") + """</table></div></main></body></html>"""
+    <p class="msg">__MESSAGE__</p><form method="get"><input name="q" value="__QUERY__" placeholder="Search name or phone"><button>Search</button></form>
+    <div class="wrap"><table><tr><th>ID</th><th>Name</th><th>Phone</th><th>Real balance</th><th>Status</th><th>Block reason</th><th>Manager action</th></tr>
+    __USER_ROWS__
+    </table></div><h2>Recent manual balance transactions</h2><div class="wrap"><table><tr><th>ID</th><th>User</th><th>Type</th><th>Amount</th><th>Balance after</th><th>Reason</th><th>Manager</th><th>Date</th></tr>
+    __TXN_ROWS__
+    </table></div></main></body></html>"""
+    return (page.replace("__MESSAGE__", message)
+                .replace("__QUERY__", q.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;").replace(">", "&gt;"))
+                .replace("__USER_ROWS__", user_rows or "<tr><td colspan='7'>No users found.</td></tr>")
+                .replace("__TXN_ROWS__", txn_rows or "<tr><td colspan='8'>No manual transactions yet.</td></tr>"))
 
 
 if __name__ == "__main__":
