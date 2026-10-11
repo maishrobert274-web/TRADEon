@@ -231,6 +231,55 @@ def api_trade():
         trade_id = cur.lastrowid
     return {"ok": True, "trade_id": trade_id, "pair": pair, "side": side, "mode": mode, "duration_seconds": duration if mode == "DURATION" else None, "entry_price": price, "status": "OPEN"}
 
+
+@app.route("/api/trades/open")
+def api_open_trades():
+    if "user_id" not in session:
+        return {"error": "login required"}, 401
+    with sqlite3.connect(DB) as con:
+        rows = con.execute(
+            "SELECT id,pair,side,amount,entry_price,mode,created_at FROM trades WHERE user_id=? AND status='OPEN' ORDER BY id DESC LIMIT 50",
+            (session["user_id"],)
+        ).fetchall()
+    return {"trades": [
+        {"id": r[0], "pair": r[1], "side": r[2], "amount": float(r[3]),
+         "entry_price": float(r[4]), "mode": r[5], "created_at": r[6]}
+        for r in rows
+    ]}
+
+@app.route("/api/trades/<int:trade_id>/close", methods=["POST"])
+def api_close_demo_trade(trade_id):
+    if "user_id" not in session:
+        return {"error": "Please sign in again."}, 401
+    symbols = {"BTC/USDT": "BTCUSDT", "ETH/USDT": "ETHUSDT", "SOL/USDT": "SOLUSDT"}
+    with sqlite3.connect(DB) as con:
+        row = con.execute(
+            "SELECT pair,side,amount,entry_price,status FROM trades WHERE id=? AND user_id=?",
+            (trade_id, session["user_id"])
+        ).fetchone()
+        if not row or row[4] != "OPEN" or row[0] not in symbols:
+            return {"error": "This trade is already closed or could not be found."}, 404
+        try:
+            response = requests.get("https://data-api.binance.vision/api/v3/ticker/price",
+                                    params={"symbol": symbols[row[0]]}, timeout=(1.5, 3))
+            response.raise_for_status()
+            exit_price = float(response.json()["price"])
+        except (requests.RequestException, KeyError, ValueError):
+            return {"error": "Market price is temporarily unavailable. Your trade remains open; try again."}, 503
+        entry_price, amount = float(row[3]), float(row[2])
+        direction = 1 if row[1] == "BUY" else -1
+        pnl = round(amount * ((exit_price - entry_price) / entry_price) * direction, 2) if entry_price else 0
+        cur = con.execute(
+            "UPDATE trades SET status='CLOSED',pnl=?,closed_at=CURRENT_TIMESTAMP,settlement_price=? WHERE id=? AND user_id=? AND status='OPEN'",
+            (pnl, exit_price, trade_id, session["user_id"])
+        )
+        if cur.rowcount != 1:
+            return {"error": "This trade has already been closed."}, 409
+        con.execute("INSERT OR IGNORE INTO demo_wallets (user_id,balance) VALUES (?,10000)", (session["user_id"],))
+        con.execute("UPDATE demo_wallets SET balance=balance+? WHERE user_id=?", (amount + pnl, session["user_id"]))
+        balance = con.execute("SELECT balance FROM demo_wallets WHERE user_id=?", (session["user_id"],)).fetchone()[0]
+    return {"ok": True, "trade_id": trade_id, "exit_price": exit_price, "pnl": pnl, "balance": balance}
+
 @app.route("/api/trades/settle-due", methods=["POST"])
 def settle_due_demo_trades():
     if "user_id" not in session:
