@@ -41,6 +41,7 @@ function setPair(button){
  document.getElementById('pair').textContent=button.dataset.pair;
  document.querySelectorAll('.tab').forEach(el=>el.classList.toggle('active',el===button));
  loadPrice();
+ loadChart();
 }
 async function loadPrice(){
  const price=document.getElementById('price'), changeEl=document.getElementById('change'), status=document.getElementById('marketStatus');
@@ -100,6 +101,9 @@ async function trade(side){
  }catch(error){alert('Unable to record the demo order right now.')}
 }
 loadPrice();
+loadChart();
 setInterval(loadPrice,30000);
+setInterval(loadChart,60000);
+window.addEventListener("resize",loadChart);
 </script>
 </body></html>
