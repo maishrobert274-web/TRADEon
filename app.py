@@ -41,21 +41,11 @@ def normalize_phone(phone):
 
 @app.route("/")
 def home():
-    # Public visitors can learn about TRADEON and create an account without logging in.
-    if "user_id" not in session:
-        return render_template("public_home.html")
-    with sqlite3.connect(DB) as con:
-        con.execute("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)", (session["user_id"],))
-        con.execute("INSERT OR IGNORE INTO demo_wallets (user_id,balance) VALUES (?,10000)", (session["user_id"],))
-        wallet_balance = con.execute(
-            "SELECT balance FROM demo_wallets WHERE user_id=?",
-            (session["user_id"],)
-        ).fetchone()[0]
-    return render_template(
-        "index.html",
-        user_name=session.get("user_name"),
-        wallet_balance=wallet_balance
-    )
+    # Keep one signed-in home: the trading terminal. Public visitors see the
+    # welcome page until they register or log in.
+    if "user_id" in session:
+        return redirect(url_for("trade"))
+    return render_template("public_home.html")
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
