@@ -90,7 +90,7 @@ function isShortInterval(){return ['5s','15s','30s'].includes(chartInterval)}
 function updateLiveCandle(price,eventMs){
  if(!tvSeries||!(price>0))return;
  const step=intervalSeconds(),bucket=Math.floor(eventMs/1000/step)*step;
- if(isShortInterval()){
+ if(isShortInterval()){candleCloseAt=(bucket+step)*1000;updateCandleClock();document.getElementById('chartStatus').textContent='Live candle updating · '+chartInterval;
   let candle=liveShortCandles.length?liveShortCandles[liveShortCandles.length-1]:null;
   if(!candle||candle.time!==bucket){candle={time:bucket,open:price,high:price,low:price,close:price};liveShortCandles.push(candle);if(liveShortCandles.length>180)liveShortCandles.shift();}
   else{candle.high=Math.max(candle.high,price);candle.low=Math.min(candle.low,price);candle.close=price;}
@@ -114,6 +114,7 @@ function connectLiveKline(){
  if(liveKlineSocket){try{liveKlineSocket.onclose=null;liveKlineSocket.close()}catch(e){}liveKlineSocket=null}
  candleCloseAt=0;updateCandleClock();
  if(!('WebSocket' in window)){document.getElementById('feedNote').textContent='Live stream unavailable';return}
+ if(isShortInterval()){document.getElementById('feedNote').textContent='LIVE · building '+chartInterval+' candles from trades';document.getElementById('chartStatus').textContent='Waiting for live trades to build '+chartInterval+' candles…';return}
  const socketUrl='wss://stream.binance.com:9443/ws/'+currentSymbol.toLowerCase()+'@kline_'+chartInterval;
  try{
   const ws=new WebSocket(socketUrl);liveKlineSocket=ws;
