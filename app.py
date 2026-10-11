@@ -264,6 +264,70 @@ def signals():
     </style></head><body><header><b>TRADEON — SIGNALS</b> &nbsp; <a href="/">Dashboard</a></header>
     <main><h1>Trading Signals</h1><p>Signals published by the TradeOn Manager. Trading involves risk.</p>{cards}</main></body></html>"""
 
+
+@app.route("/manager/auto-signals", methods=["POST"])
+def manager_auto_signals():
+    if not admin_required():
+        return redirect(url_for("manager_login"))
+    pair = request.form.get("pair", "BTC/USDT").upper()
+    symbols = {"BTC/USDT": "BTCUSDT", "ETH/USDT": "ETHUSDT", "SOL/USDT": "SOLUSDT"}
+    if pair not in symbols:
+        return redirect(url_for("manager_signals") + "?auto=unsupported")
+    try:
+        response = requests.get(
+            "https://api.binance.com/api/v3/klines",
+            params={"symbol": symbols[pair], "interval": "1h", "limit": 60},
+            timeout=15
+        )
+        response.raise_for_status()
+        candles = response.json()
+        closes = [float(candle[4]) for candle in candles[:-1]]
+        if len(closes) < 30:
+            return redirect(url_for("manager_signals") + "?auto=data_error")
+        def ema(values, period):
+            alpha = 2 / (period + 1)
+            result = values[0]
+            for value in values[1:]:
+                result = value * alpha + result * (1 - alpha)
+            return result
+        def rsi(values, period=14):
+            changes = [values[i] - values[i - 1] for i in range(1, len(values))]
+            gains = [max(change, 0) for change in changes[-period:]]
+            losses = [max(-change, 0) for change in changes[-period:]]
+            avg_gain = sum(gains) / period
+            avg_loss = sum(losses) / period
+            if avg_loss == 0:
+                return 100.0
+            return 100 - (100 / (1 + avg_gain / avg_loss))
+        price = closes[-1]
+        fast_now, slow_now = ema(closes[-9:], 9), ema(closes[-21:], 21)
+        fast_prev, slow_prev = ema(closes[-10:-1], 9), ema(closes[-22:-1], 21)
+        momentum = rsi(closes)
+        action = None
+        if fast_prev <= slow_prev and fast_now > slow_now and 40 <= momentum <= 68:
+            action = "BUY"
+        elif fast_prev >= slow_prev and fast_now < slow_now and 32 <= momentum <= 60:
+            action = "SELL"
+        if not action:
+            return redirect(url_for("manager_signals") + "?auto=no_setup")
+        if action == "BUY":
+            stop, target = price * 0.985, price * 1.03
+        else:
+            stop, target = price * 1.015, price * 0.97
+        note = (
+            f"TEST MODE — automatically generated from Binance 1h EMA(9/21) crossover "
+            f"and RSI({momentum:.1f}). Review before publishing; not financial advice."
+        )
+        with sqlite3.connect(DB) as con:
+            con.execute(
+                """INSERT INTO signals (pair,action,entry_price,stop_loss,take_profit,strength,note,active)
+                   VALUES (?,?,?,?,?,?,?,0)""",
+                (pair, action, f"{price:.8f}", f"{stop:.8f}", f"{target:.8f}", "Medium", note)
+            )
+        return redirect(url_for("manager_signals") + "?auto=draft")
+    except (requests.RequestException, KeyError, TypeError, ValueError, ZeroDivisionError):
+        return redirect(url_for("manager_signals") + "?auto=data_error")
+
 @app.route("/manager/signals", methods=["GET", "POST"])
 def manager_signals():
     if not admin_required():
@@ -304,7 +368,7 @@ def manager_signals():
     .wrap{{overflow:auto}}table{{width:100%;min-width:850px;border-collapse:collapse;background:white}}th,td{{padding:9px;border-bottom:1px solid #eee;text-align:left;font-size:13px}}
     a{{color:white;text-decoration:none}}.error{{color:#b00020;font-weight:bold}}
     </style></head><body><header><b>TRADEON MANAGER — SIGNALS</b> &nbsp; <a href="/manager">Dashboard</a></header>
-    <main><h2>Create Signal</h2><div class="card">{("<p class='error'>"+error+"</p>") if error else ""}
+    <main><h2>Automatic Signal Generator (TEST MODE)</h2><div class="card"><p>This checks Binance 1-hour candles using EMA and RSI. Generated signals are saved as hidden drafts and will not be visible to users until you publish them.</p><form method="post" action="/manager/auto-signals"><select name="pair"><option>BTC/USDT</option><option>ETH/USDT</option><option>SOL/USDT</option></select><button>Analyse Market & Generate Test Signal</button></form>{("<p>" + ({"draft":"A test signal draft was created. Review it below and tap Publish when ready.","no_setup":"No clear setup found right now. Try again later.","data_error":"Could not read Binance market data. Please try again.","unsupported":"That pair is not supported yet."}[new URLSearchParams(location.search).get("auto")] || "") + "</p>") if request.args.get("auto") else ""}</div><h2>Create Signal Manually</h2><div class="card">{("<p class='error'>"+error+"</p>") if error else ""}
     <form method="post">
       <div class="grid"><select name="pair" required><option value="BTC/USD">BTC/USD</option><option value="BTC/USDT">BTC/USDT</option><option value="ETH/USD">ETH/USD</option><option value="ETH/USDT">ETH/USDT</option><option value="SOL/USDT">SOL/USDT</option><option value="BNB/USDT">BNB/USDT</option><option value="XRP/USDT">XRP/USDT</option></select>
       <select name="action"><option value="BUY">BUY</option><option value="SELL">SELL</option></select></div>
