@@ -474,8 +474,12 @@ def manager_signal_toggle(signal_id):
 
 @app.route("/trade")
 def trade():
-    if "user_id" not in session: return redirect(url_for("login"))
-    return render_template("trade.html", user_name=session.get("user_name"))
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    with sqlite3.connect(DB) as con:
+        con.execute("INSERT OR IGNORE INTO demo_wallets (user_id,balance) VALUES (?,10000)", (session["user_id"],))
+        demo_balance = con.execute("SELECT balance FROM demo_wallets WHERE user_id=?", (session["user_id"],)).fetchone()[0]
+    return render_template("trade.html", user_name=session.get("user_name"), demo_balance=demo_balance)
 
 @app.route("/trades")
 def trades():
