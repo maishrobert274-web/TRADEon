@@ -29,6 +29,8 @@ def init_db():
             if column not in trade_cols:
                 con.execute(f"ALTER TABLE trades ADD COLUMN {column} {definition}")
         con.execute("""CREATE TABLE IF NOT EXISTS signals (id INTEGER PRIMARY KEY AUTOINCREMENT, pair TEXT NOT NULL, action TEXT NOT NULL, entry_price TEXT, stop_loss TEXT, take_profit TEXT, strength TEXT NOT NULL, note TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, active INTEGER NOT NULL DEFAULT 1)""")
+        con.execute("CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
+        con.executemany("INSERT OR IGNORE INTO app_settings (key,value) VALUES (?,?)", [("demo_win_percent","20"),("demo_loss_percent","100"),("demo_default_duration","15")])
 init_db()
 
 def normalize_phone(phone):
@@ -353,7 +355,10 @@ def settle_due_demo_trades():
                 continue
             entry_price, amount = float(row[4]), float(row[3])
             won = (row[2] == "BUY" and exit_price > entry_price) or (row[2] == "SELL" and exit_price < entry_price)
-            pnl = round(amount * 0.2, 2) if won else -round(amount, 2)
+            settings = dict(con.execute("SELECT key,value FROM app_settings").fetchall())
+            win_percent = max(0, min(100, float(settings.get("demo_win_percent", "20"))))
+            loss_percent = max(0, min(100, float(settings.get("demo_loss_percent", "100"))))
+            pnl = round(amount * win_percent / 100, 2) if won else -round(amount * loss_percent / 100, 2)
             con.execute("UPDATE trades SET status='CLOSED',pnl=?,closed_at=CURRENT_TIMESTAMP,settlement_price=? WHERE id=? AND user_id=? AND status='OPEN'", (pnl, exit_price, row[0], session["user_id"]))
             con.execute("UPDATE demo_wallets SET balance=balance+? WHERE user_id=?", (amount + pnl if won else 0, session["user_id"]))
             results.append({"trade_id": row[0], "won": won, "pnl": pnl, "exit_price": exit_price})
@@ -841,6 +846,30 @@ def manager_user_detail(user_id):
     rows="".join(f"<tr><td>{d[0]}</td><td>KSh {d[1]:,.2f}</td><td>{d[2]}</td><td>{d[3] or '-'}</td><td>{d[4]}</td></tr>" for d in deposits)
     return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>User details</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa}}header{{background:#111;color:white;padding:18px 5%}}main{{padding:24px 5%}}.card{{background:white;padding:18px;border-radius:12px;margin-bottom:18px}}table{{width:100%;border-collapse:collapse;background:white}}th,td{{padding:10px;border-bottom:1px solid #eee;text-align:left;font-size:13px}}a{{color:white}}</style></head><body><header><b>TRADEON MANAGER — USER DETAILS</b> &nbsp; <a href="/manager/users">Users</a></header><main><div class="card"><h2>{user[1]}</h2><p>User ID: {user[0]}</p><p>Phone: {user[2]}</p><p>Verification: {'Verified' if user[3] else 'Unverified'}</p><p>Wallet balance: KSh {(wallet[0] if wallet else 0):,.2f}</p></div><h2>Deposit history</h2><table><tr><th>ID</th><th>Amount</th><th>Status</th><th>Receipt</th><th>Date</th></tr>{rows or "<tr><td colspan='5'>No deposits yet.</td></tr>"}</table></main></body></html>"""
 
+@app.route("/manager/settings", methods=["GET", "POST"])
+def manager_settings():
+    if not admin_required():
+        return redirect(url_for("manager_login"))
+    message = ""
+    allowed_durations = (15, 30, 60, 300, 900)
+    with sqlite3.connect(DB) as con:
+        if request.method == "POST":
+            try:
+                win = float(request.form.get("demo_win_percent", "20"))
+                loss = float(request.form.get("demo_loss_percent", "100"))
+                duration = int(request.form.get("demo_default_duration", "15"))
+                if not (0 <= win <= 100 and 0 <= loss <= 100 and duration in allowed_durations):
+                    raise ValueError
+                con.executemany("INSERT OR REPLACE INTO app_settings (key,value) VALUES (?,?)", [("demo_win_percent",str(win)),("demo_loss_percent",str(loss)),("demo_default_duration",str(duration))])
+                message = "Demo settings saved."
+            except (TypeError, ValueError):
+                message = "Enter percentages from 0 to 100 and select a valid duration."
+        settings = dict(con.execute("SELECT key,value FROM app_settings").fetchall())
+    win = settings.get("demo_win_percent", "20")
+    loss = settings.get("demo_loss_percent", "100")
+    duration = settings.get("demo_default_duration", "15")
+    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Demo Settings</title><style>body{{font-family:Arial;background:#f5f7fa;margin:0;color:#111}}header{{background:#111;color:white;padding:18px 5%}}main{{max-width:650px;margin:auto;padding:24px 5%}}form{{background:white;padding:20px;border-radius:12px}}label{{display:block;margin-top:14px;font-weight:bold}}input,select,button{{box-sizing:border-box;width:100%;padding:12px;margin-top:6px;border:1px solid #ccc;border-radius:8px}}button{{background:#111;color:white;font-weight:bold}}.note{{background:#fff3cd;padding:12px;border-radius:8px}}</style></head><body><header><b>TRADEON MANAGER — SETTINGS</b></header><main><p><a href="/manager">← Back to dashboard</a></p><h2>Demo trading controls</h2><p class="note"><b>DEMO ONLY.</b> These controls affect simulated trades only, not real-money trades or Binance prices.</p><p>{message}</p><form method="post"><label>Simulated profit on a winning demo trade (%)</label><input type="number" min="0" max="100" step="0.1" name="demo_win_percent" value="{win}" required><label>Simulated loss on a losing demo trade (%)</label><input type="number" min="0" max="100" step="0.1" name="demo_loss_percent" value="{loss}" required><label>Default demo trade duration</label><select name="demo_default_duration"><option value="15" {"selected" if duration=="15" else ""}>15 seconds</option><option value="30" {"selected" if duration=="30" else ""}>30 seconds</option><option value="60" {"selected" if duration=="60" else ""}>1 minute</option><option value="300" {"selected" if duration=="300" else ""}>5 minutes</option><option value="900" {"selected" if duration=="900" else ""}>15 minutes</option></select><button type="submit">Save demo settings</button></form></main></body></html>"""
+
 @app.route("/manager")
 def manager_dashboard():
     if not admin_required():
@@ -859,7 +888,7 @@ def manager_dashboard():
         f"<tr><td>{d[0]}</td><td>{d[1]}</td><td>{d[2]}</td><td>KSh {d[3]:,.2f}</td><td>{d[4]}</td><td>{d[5] or '-'}</td><td>{d[6]}</td></tr>"
         for d in deposits
     )
-    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Manager</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa;color:#111}}header{{background:#111;color:white;padding:18px 5%;display:flex;justify-content:space-between}}main{{padding:24px 5%}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}}.card{{background:white;padding:18px;border-radius:12px;box-shadow:0 2px 10px #0001}}table{{width:100%;border-collapse:collapse;background:white;margin-top:20px;font-size:13px}}th,td{{padding:10px;border-bottom:1px solid #eee;text-align:left}}.tablewrap{{overflow:auto}}a{{color:white}}</style></head><body><header><b>TRADEON MANAGER</b><a href="/manager/logout">Logout</a></header><main><p><a href="/manager/users" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">👥 Manage Users</a></p><p><a href="/manager/signals" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">📈 Create & Manage Signals</a></p><h2>Dashboard</h2><div class="cards"><div class="card"><b>Users</b><h2>{users}</h2></div><div class="card"><b>Verified</b><h2>{verified}</h2></div><div class="card"><b>Pending deposits</b><h2>{pending}</h2></div><div class="card"><b>Successful deposits</b><h2>KSh {successful:,.2f}</h2></div></div><h2>Recent deposits</h2><div class="tablewrap"><table><tr><th>ID</th><th>User</th><th>Phone</th><th>Amount</th><th>Status</th><th>Receipt</th><th>Date</th></tr>{rows or "<tr><td colspan='7'>No deposits yet.</td></tr>"}</table></div></main></body></html>"""
+    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Manager</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa;color:#111}}header{{background:#111;color:white;padding:18px 5%;display:flex;justify-content:space-between}}main{{padding:24px 5%}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}}.card{{background:white;padding:18px;border-radius:12px;box-shadow:0 2px 10px #0001}}table{{width:100%;border-collapse:collapse;background:white;margin-top:20px;font-size:13px}}th,td{{padding:10px;border-bottom:1px solid #eee;text-align:left}}.tablewrap{{overflow:auto}}a{{color:white}}</style></head><body><header><b>TRADEON MANAGER</b><a href="/manager/logout">Logout</a></header><main><p><a href="/manager/users" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">👥 Manage Users</a></p><p><a href="/manager/signals" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">📈 Create & Manage Signals</a></p><p><a href="/manager/settings" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">⚙️ Demo Trading Settings</a></p><h2>Dashboard</h2><div class="cards"><div class="card"><b>Users</b><h2>{users}</h2></div><div class="card"><b>Verified</b><h2>{verified}</h2></div><div class="card"><b>Pending deposits</b><h2>{pending}</h2></div><div class="card"><b>Successful deposits</b><h2>KSh {successful:,.2f}</h2></div></div><h2>Recent deposits</h2><div class="tablewrap"><table><tr><th>ID</th><th>User</th><th>Phone</th><th>Amount</th><th>Status</th><th>Receipt</th><th>Date</th></tr>{rows or "<tr><td colspan='7'>No deposits yet.</td></tr>"}</table></div></main></body></html>"""
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
