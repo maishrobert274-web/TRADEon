@@ -10,7 +10,7 @@ header{background:#101828;color:white;padding:16px;display:flex;justify-content:
 main{max-width:720px;margin:auto;padding:14px 12px 90px}.card{background:#fff;border-radius:14px;padding:16px;margin-bottom:12px;box-shadow:0 2px 8px #1018280a}
 .muted{color:#667085;font-size:13px}.balance{font-size:27px;font-weight:900;margin:7px 0}.notice{background:#fff8e6;border:1px solid #f5d98b;padding:12px;border-radius:10px;font-size:13px;line-height:1.45;margin-bottom:12px}
 .tabs{display:flex;gap:8px;margin-bottom:12px;overflow-x:auto}.tab{background:#e9eef3;border:0;border-radius:9px;padding:10px 13px;font-weight:700;white-space:nowrap}.tab.active{background:#101828;color:#fff}
-.marketTop{display:flex;justify-content:space-between;align-items:center}.pair{font-size:19px;font-weight:800}.price{font-size:26px;font-weight:900;margin:12px 0 4px;overflow-wrap:anywhere}.up{color:#079455}.down{color:#d92d20}
+.marketTop{display:flex;justify-content:space-between;align-items:center}.pair{font-size:19px;font-weight:800}.price{font-size:26px;font-weight:900;margin:12px 0 4px;overflow-wrap:anywhere}.up{color:#079455}.down{color:#d92d20}.chartWrap{height:220px;position:relative;margin-top:12px}.chartWrap canvas{width:100%;height:100%;display:block}.chartMeta{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:#667085}
 .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.buy,.sell{border:0;border-radius:10px;padding:15px;font-weight:900;font-size:17px;color:#fff}.buy{background:#079455}.sell{background:#d92d20}
 .amounts{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:12px 0}.amt{border:1px solid #d0d5dd;background:white;border-radius:9px;padding:10px 4px;font-weight:700}.custom{width:100%;padding:13px;border:1px solid #d0d5dd;border-radius:9px;font-size:16px}
 .links{display:grid;grid-template-columns:1fr 1fr;gap:10px}.linkcard{display:block;padding:15px;background:#fff;border-radius:12px;text-decoration:none;color:#101828;border:1px solid #eaecf0;font-weight:700}.linkcard span{display:block;font-size:12px;color:#667085;font-weight:400;margin-top:5px}
@@ -25,7 +25,7 @@ main{max-width:720px;margin:auto;padding:14px 12px 90px}.card{background:#fff;bo
 <div class="notice"><b>Demo status:</b> Market prices are informational. Orders are not sent to a cryptocurrency exchange. Do not deposit real money until payments and trading have been fully tested and approved.</div>
 <div class="tabs"><button class="tab active" data-pair="BTC/USDT" data-symbol="BTCUSDT" onclick="setPair(this)">BTC/USDT</button><button class="tab" data-pair="ETH/USDT" data-symbol="ETHUSDT" onclick="setPair(this)">ETH/USDT</button><button class="tab" data-pair="SOL/USDT" data-symbol="SOLUSDT" onclick="setPair(this)">SOL/USDT</button></div>
 <section class="card"><div class="marketTop"><span class="pair" id="pair">BTC/USDT</span><span id="change" class="muted">--</span></div><div class="price" id="price">Loading market price…</div><div class="muted" id="marketStatus">Checking public market data</div></section>
-<section class="card"><h3 style="margin-top:0">Demo trade</h3><div class="muted">Choose an amount in Kenyan shillings</div>
+<section class="card"><div class="marketTop"><b>Price chart</b><span class="muted">Last 24 hours · 1h</span></div><div class="chartWrap"><canvas id="priceChart" aria-label="Price chart for selected market"></canvas></div><div class="chartMeta"><span id="chartStatus">Loading chart…</span><span>Informational only</span></div></section>\n<section class="card"><h3 style="margin-top:0">Demo trade</h3><div class="muted">Choose an amount in Kenyan shillings</div>
 <div class="amounts"><button class="amt" onclick="setAmount(100)">100</button><button class="amt" onclick="setAmount(500)">500</button><button class="amt" onclick="setAmount(1000)">1,000</button><button class="amt" onclick="setAmount(5000)">5,000</button></div>
 <input id="amount" class="custom" type="number" min="10" step="1" placeholder="Enter amount (minimum KSh 10)">
 <div class="actions" style="margin-top:12px"><button class="buy" onclick="trade('BUY')">BUY</button><button class="sell" onclick="trade('SELL')">SELL</button></div>
@@ -56,6 +56,35 @@ async function loadPrice(){
  }catch(error){
   price.textContent='Temporarily unavailable';changeEl.textContent='--';
   changeEl.className='muted';status.textContent='Could not retrieve public market data. Please try again shortly.';
+ }
+}
+async function loadChart(){
+ const canvas=document.getElementById('priceChart'), status=document.getElementById('chartStatus');
+ if(!canvas||!status)return;
+ const ctx=canvas.getContext('2d');
+ status.textContent='Loading chart…';
+ try{
+  const response=await fetch('/api/market/history?symbol='+encodeURIComponent(currentSymbol));
+  const data=await response.json();
+  if(!response.ok||!Array.isArray(data.points)||data.points.length<2)throw new Error(data.error||'Chart unavailable');
+  const dpr=window.devicePixelRatio||1, width=Math.max(280,canvas.clientWidth), height=Math.max(180,canvas.clientHeight);
+  canvas.width=width*dpr;canvas.height=height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);
+  const pad={l:8,r:8,t:14,b:16}, plotW=width-pad.l-pad.r, plotH=height-pad.t-pad.b;
+  const values=data.points.map(p=>p.price), min=Math.min(...values), max=Math.max(...values), span=max-min||Math.max(max*0.001,1);
+  ctx.clearRect(0,0,width,height);
+  ctx.strokeStyle='#eaecf0';ctx.lineWidth=1;
+  for(let i=0;i<4;i++){const y=pad.t+i*plotH/3;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(width-pad.r,y);ctx.stroke()}
+  const coords=values.map((v,i)=>({x:pad.l+i*plotW/(values.length-1),y:pad.t+(max-v)/span*plotH}));
+  ctx.beginPath();coords.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
+  const lineColor=values[values.length-1]>=values[0]?'#079455':'#d92d20';
+  ctx.strokeStyle=lineColor;ctx.lineWidth=2.5;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();
+  const last=coords[coords.length-1];ctx.fillStyle=lineColor;ctx.beginPath();ctx.arc(last.x,last.y,4,0,Math.PI*2);ctx.fill();
+  status.textContent='Source: '+(data.source||'market data')+' · '+values.length+' hourly points';
+ }catch(error){
+  const dpr=window.devicePixelRatio||1,width=Math.max(280,canvas.clientWidth),height=Math.max(180,canvas.clientHeight);
+  canvas.width=width*dpr;canvas.height=height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,width,height);
+  ctx.strokeStyle='#eaecf0';for(let i=1;i<4;i++){ctx.beginPath();ctx.moveTo(8,i*height/4);ctx.lineTo(width-8,i*height/4);ctx.stroke()}
+  status.textContent='Chart data unavailable right now. Try again shortly.';
  }
 }
 async function trade(side){
