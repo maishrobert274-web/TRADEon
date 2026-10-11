@@ -280,6 +280,51 @@ def api_close_demo_trade(trade_id):
         balance = con.execute("SELECT balance FROM demo_wallets WHERE user_id=?", (session["user_id"],)).fetchone()[0]
     return {"ok": True, "trade_id": trade_id, "exit_price": exit_price, "pnl": pnl, "balance": balance}
 
+
+@app.route("/api/trades/close-all", methods=["POST"])
+def api_close_all_demo_trades():
+    if "user_id" not in session:
+        return {"error": "Please sign in again."}, 401
+    symbols = {"BTC/USDT": "BTCUSDT", "ETH/USDT": "ETHUSDT", "SOL/USDT": "SOLUSDT"}
+    with sqlite3.connect(DB) as con:
+        rows = con.execute(
+            "SELECT id,pair,side,amount,entry_price FROM trades WHERE user_id=? AND status='OPEN' ORDER BY id",
+            (session["user_id"],)
+        ).fetchall()
+        if not rows:
+            balance_row = con.execute("SELECT balance FROM demo_wallets WHERE user_id=?", (session["user_id"],)).fetchone()
+            return {"ok": True, "closed": 0, "pnl": 0, "balance": float(balance_row[0]) if balance_row else 0}
+        prices = {}
+        try:
+            for pair in {r[1] for r in rows}:
+                if pair not in symbols:
+                    return {"error": "Unsupported market in open trades. Close positions individually."}, 400
+                response = requests.get(
+                    "https://data-api.binance.vision/api/v3/ticker/price",
+                    params={"symbol": symbols[pair]}, timeout=(1.5, 3)
+                )
+                response.raise_for_status()
+                prices[pair] = float(response.json()["price"])
+        except (requests.RequestException, KeyError, ValueError):
+            return {"error": "Market prices are temporarily unavailable. No trades were closed; please retry."}, 503
+        total_pnl = 0.0
+        closed_count = 0
+        for trade_id, pair, side, amount_raw, entry_raw in rows:
+            amount, entry_price, exit_price = float(amount_raw), float(entry_raw), prices[pair]
+            direction = 1 if side == "BUY" else -1
+            pnl = round(amount * ((exit_price - entry_price) / entry_price) * direction, 2) if entry_price else 0
+            cur = con.execute(
+                "UPDATE trades SET status='CLOSED',pnl=?,closed_at=CURRENT_TIMESTAMP,settlement_price=? WHERE id=? AND user_id=? AND status='OPEN'",
+                (pnl, exit_price, trade_id, session["user_id"])
+            )
+            if cur.rowcount == 1:
+                total_pnl += pnl
+                closed_count += 1
+                con.execute("INSERT OR IGNORE INTO demo_wallets (user_id,balance) VALUES (?,10000)", (session["user_id"],))
+                con.execute("UPDATE demo_wallets SET balance=balance+? WHERE user_id=?", (amount + pnl, session["user_id"]))
+        balance_row = con.execute("SELECT balance FROM demo_wallets WHERE user_id=?", (session["user_id"],)).fetchone()
+    return {"ok": True, "closed": closed_count, "pnl": round(total_pnl, 2), "balance": float(balance_row[0]) if balance_row else 0}
+
 @app.route("/api/trades/settle-due", methods=["POST"])
 def settle_due_demo_trades():
     if "user_id" not in session:
