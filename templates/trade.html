@@ -9,7 +9,7 @@
 </style>
 </head>
 <body>
-<header class="top"><div class="brand">TRADE<span>ON</span></div><div class="navlinks"><a href="/">Home</a><a href="/trades">Trades</a><a href="/signals">Insights</a><a href="/signals">AI Trader</a><a href="/logout">Log out</a></div><div class="balance">DEMO KSh <span id="balance">{{ "%.2f"|format(demo_balance) }}</span></div></header>
+<header class="top"><div class="brand">TRADE<span>ON</span></div><div class="balance">DEMO KSh <span id="balance">{{ "%.2f"|format(demo_balance) }}</span></div></header>
 <div style="display:flex;gap:8px;padding:10px 14px;background:#151a21;border-bottom:1px solid #29313a"><input id="assetSearch" type="search" placeholder="Search markets…" oninput="filterMarkets(this.value)" style="flex:1;min-width:0;background:#0e1319;border:1px solid #35404d;border-radius:8px;padding:10px;color:#e8edf2"><a class="nav-tab" href="/signals">Chats</a><a class="nav-tab" href="/signals">Notifications</a></div>
 <nav class="platform-nav" aria-label="Trading sections">
 <button class="nav-tab selected" type="button" onclick="selectPlatformMode('fixed',this)">Fixed Time</button>
