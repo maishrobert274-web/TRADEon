@@ -18,7 +18,7 @@
 <div class="card">
 <div class="marketbar" id="marketList"><button class="pair active" data-pair="BTC/USDT" data-symbol="BTCUSDT" onclick="choosePair(this)">BTC/USDT</button><button class="pair" data-pair="ETH/USDT" data-symbol="ETHUSDT" onclick="choosePair(this)">ETH/USDT</button><button class="pair" data-pair="SOL/USDT" data-symbol="SOLUSDT" onclick="choosePair(this)">SOL/USDT</button></div>
 <div class="pricehead"><div><div class="symbol" id="symbol">BTC/USDT</div><div class="price" id="price">Loading price…</div></div><div style="text-align:right"><div class="change" id="change">--</div><div class="muted" id="source">Getting market data</div></div></div>
-<div class="chart" style="padding:0;overflow:hidden"><iframe id="tradingViewFrame" title="TradingView live market chart" style="width:100%;height:100%;min-height:220px;border:0;display:block" loading="eager" allowfullscreen></iframe></div>
+<div class="chart" style="padding:0;overflow:hidden"><div id="tvChart" role="img" aria-label="Live candlestick market chart with demo trade entry lines" style="width:100%;height:100%;min-height:220px;display:block"></div></div>
 <div class="chartfoot"><span id="chartStatus">Loading market candles…</span><span id="candleCountdown">Candle closes in --:--</span><span id="feedNote">Market feed</span></div>
 <div class="chart-controls"><div class="timeframes"><span style="align-self:center;color:#9aa5b1;font-size:11px;padding:0 5px">CANDLE SIZE</span><button class="selected" data-interval="1m" onclick="setIntervalChoice('1m',this)">1 min</button><button data-interval="5m" onclick="setIntervalChoice('5m',this)">5 min</button><button data-interval="15m" onclick="setIntervalChoice('15m',this)">15 min</button><button data-interval="1h" onclick="setIntervalChoice('1h',this)">1 hour</button></div></div>
 </div>
@@ -58,7 +58,7 @@ function showCountdown(seconds,tradeId){if(countdownTimer)clearInterval(countdow
 async function settleDue(){try{const r=await fetch('/api/trades/settle-due',{method:'POST'});if(r.ok){const d=await r.json();if(d.settled&&d.settled.length){document.getElementById('tradeStatus').textContent=d.settled.map(t=>'Trade #'+t.trade_id+': '+(t.won?'WIN':'LOSS')+' · demo P/L KSh '+Number(t.pnl).toFixed(2)).join(' | ');location.reload()}}}catch(e){}}
 function choosePair(button){currentSymbol=button.dataset.symbol;currentPair=button.dataset.pair;document.getElementById('symbol').textContent=currentPair;document.querySelectorAll('.pair').forEach(b=>b.classList.toggle('active',b===button));liveShortCandles=[];liveCandle=null;shortChartReady=false;loadPrice();loadChart();connectLiveKline()}
 async function loadPrice(){const p=document.getElementById('price'),ch=document.getElementById('change'),src=document.getElementById('source');try{const r=await fetch('/api/market?symbol='+encodeURIComponent(currentSymbol));const d=await r.json();if(!r.ok)throw Error(d.error||'unavailable');lastLivePrice=Number(d.price)||lastLivePrice;p.textContent=fmt(d.price);ch.textContent=(d.change_percent>=0?'+':'')+Number(d.change_percent).toFixed(2)+'%';ch.style.color=d.change_percent>=0?'#27d99a':'#ff6b6b';src.textContent='Source: '+(d.source||'market data')}catch(e){p.textContent='Price unavailable';ch.textContent='--';src.textContent='Market feed temporarily unavailable'}}
-let chartType='candles', chartInterval='1m', tvChart=null, tvSeries=null, tvResizeObserver=null, chartBusy=false, liveCandle=null, liveShortCandles=[], shortChartReady=false;
+let chartType='candles', chartInterval='1m', tvChart=null, tvSeries=null, tvResizeObserver=null, chartBusy=false, liveCandle=null, liveShortCandles=[], shortChartReady=false, tradePriceLines=[];
 document.querySelectorAll('.chart-types button').forEach(b=>b.classList.toggle('selected',b.dataset.chart==='candles'));
 function initTvChart(){
  const host=document.getElementById('tvChart');
@@ -73,7 +73,7 @@ function initTvChart(){
 function setSeriesType(type){
  if(!initTvChart())return;
  const L=window.LightweightCharts;
- if(tvSeries){tvChart.removeSeries(tvSeries);tvSeries=null}
+ if(tvSeries){tradePriceLines=[];tvChart.removeSeries(tvSeries);tvSeries=null}
  chartType=type;
  if(type==='line')tvSeries=tvChart.addSeries(L.LineSeries,{color:'#20c997',lineWidth:2,priceLineVisible:true});
  else if(type==='area')tvSeries=tvChart.addSeries(L.AreaSeries,{lineColor:'#20c997',topColor:'rgba(32,201,151,0.28)',bottomColor:'rgba(32,201,151,0.02)',lineWidth:2});
@@ -108,30 +108,58 @@ function connectLiveKline(){
  if(!('WebSocket' in window)){document.getElementById('feedNote').textContent='Price feed unavailable';return}
  try{
   const ts=new WebSocket('wss://stream.binance.com:9443/ws/'+currentSymbol.toLowerCase()+'@trade');liveTradeSocket=ts;
-  ts.onmessage=(ev)=>{if(liveTradeSocket!==ts)return;try{const d=JSON.parse(ev.data),price=Number(d.p);if(price>0){lastLivePrice=price;document.getElementById('price').textContent=fmt(price);document.getElementById('source').textContent='Live Binance trade price';}}catch(e){}};
+  ts.onmessage=(ev)=>{if(liveTradeSocket!==ts)return;try{const d=JSON.parse(ev.data),price=Number(d.p);if(price>0){lastLivePrice=price;document.getElementById('price').textContent=fmt(price);document.getElementById('source').textContent='Live Binance trade price';updateLiveCandle(price,Number(d.T)||Date.now());}}catch(e){}};
   ts.onopen=()=>{if(liveTradeSocket===ts)document.getElementById('feedNote').textContent='TradingView chart · live price feed';};
   ts.onerror=()=>{if(liveTradeSocket===ts)document.getElementById('feedNote').textContent='Live price feed reconnecting…'};
  }catch(e){document.getElementById('feedNote').textContent='Live price feed unavailable'}
 }
 
 let lastChartViewKey='';
-function tradingViewInterval(){return ({'1m':'1','5m':'5','15m':'15','1h':'60','4h':'240','1d':'D'})[chartInterval]||'1'}
-function loadChart(){
- const frame=document.getElementById('tradingViewFrame');if(!frame)return;
- const symbol='BINANCE:'+currentSymbol;
- const interval=tradingViewInterval();
- const src='https://www.tradingview.com/widgetembed/?frameElementId=tradeon_tradingview&symbol='+encodeURIComponent(symbol)+'&interval='+encodeURIComponent(interval)+'&hide_side_toolbar=0&symboledit=0&saveimage=0&toolbarbg=151a21&theme=dark&style=1&timezone=Etc%2FUTC&withdateranges=1&hideideas=1&locale=en&allow_symbol_change=0&details=0&hotlist=0&calendar=0';
- if(frame.dataset.symbol!==symbol||frame.dataset.interval!==interval){frame.src=src;frame.dataset.symbol=symbol;frame.dataset.interval=interval;}
- const status=document.getElementById('chartStatus');if(status)status.textContent='TradingView live chart · '+currentPair+' · '+chartInterval;
- const note=document.getElementById('feedNote');if(note)note.textContent='Powered by TradingView';
+function refreshTradePriceLines(trades){
+ if(!tvSeries||!window.LightweightCharts)return;
+ for(const line of tradePriceLines){try{tvSeries.removePriceLine(line)}catch(e){}}
+ tradePriceLines=[];
+ (trades||[]).forEach(tr=>{
+  const price=Number(tr.entry_price);if(!(price>0))return;
+  const isBuy=String(tr.side||'').toUpperCase()==='BUY'||String(tr.side||'').toUpperCase()==='UP';
+  const color=isBuy?'#20c997':'#ff5b62';
+  try{tradePriceLines.push(tvSeries.createPriceLine({price,color,lineWidth:2,lineStyle:window.LightweightCharts.LineStyle.Solid,axisLabelVisible:true,title:(isBuy?'BUY':'SELL')+' #'+tr.id+' · '+fmt(price)}))}catch(e){}
+ });
+}
+function chartRowsFromKlines(rows){
+ return rows.map(k=>({time:Math.floor(Number(k[0])/1000),open:Number(k[1]),high:Number(k[2]),low:Number(k[3]),close:Number(k[4])})).filter(k=>k.time&&k.open>0&&k.high>0&&k.low>0&&k.close>0);
+}
+async function loadChart(){
+ if(chartBusy)return;
+ if(!initTvChart())return;
+ chartBusy=true;
+ const status=document.getElementById('chartStatus'),note=document.getElementById('feedNote');
+ try{
+  const url='https://api.binance.com/api/v3/klines?symbol='+encodeURIComponent(currentSymbol)+'&interval='+encodeURIComponent(chartInterval)+'&limit=240';
+  const response=await fetchChartWithTimeout(url,9000);
+  if(!response.ok)throw Error('Market candle request failed');
+  const rows=chartRowsFromKlines(await response.json());
+  if(!rows.length)throw Error('No market candles returned');
+  liveShortCandles=rows.slice();liveCandle=rows[rows.length-1];
+  const chartData=(chartType==='line'||chartType==='area')?rows.map(k=>({time:k.time,value:k.close})):rows;
+  tvSeries.setData(chartData);
+  tvChart.timeScale().fitContent();
+  candleCloseAt=(rows[rows.length-1].time+intervalSeconds())*1000;updateCandleClock();
+  if(status)status.textContent='Live Binance candlesticks · '+currentPair+' · '+chartInterval;
+  if(note)note.textContent='Live market · demo trade lines';
+  try{const tr=await fetch('/api/trades/open',{cache:'no-store'});if(tr.ok){const data=await tr.json();refreshTradePriceLines(data.trades||[]);}}catch(e){}
+ }catch(e){
+  if(status)status.textContent='Market candles unavailable. Check connection and refresh.';
+  if(note)note.textContent='Waiting for live market candles';
+ }finally{chartBusy=false}
 }
 
 async function loadOpenPositions(){
  const list=document.getElementById('openPositionsList');if(!list)return;
  try{
   const r=await fetch('/api/trades/open',{cache:'no-store'});const d=await r.json();if(!r.ok)throw Error(d.error||'Could not load trades');
-  if(!d.trades||!d.trades.length){list.innerHTML='<div class="position-empty">No open trades. New demo positions will appear here.</div>';return}
-  list.innerHTML=d.trades.map(tr=>'<div class="position-row"><div><strong>#'+tr.id+' · '+tr.pair+' · '+tr.side+'</strong><div class="position-meta">Amount KSh '+Number(tr.amount).toFixed(2)+' · Entry '+fmt(tr.entry_price)+' · '+tr.mode+'</div></div><button class="close-position" onclick="closeOpenTrade('+tr.id+',this)">CLOSE</button></div>').join('');
+  if(!d.trades||!d.trades.length){list.innerHTML='<div class="position-empty">No open trades. New demo positions will appear here.</div>';refreshTradePriceLines([]);return}
+  list.innerHTML=d.trades.map(tr=>'<div class="position-row"><div><strong>#'+tr.id+' · '+tr.pair+' · '+tr.side+'</strong><div class="position-meta">Amount KSh '+Number(tr.amount).toFixed(2)+' · Entry '+fmt(tr.entry_price)+' · '+tr.mode+'</div></div><button class="close-position" onclick="closeOpenTrade('+tr.id+',this)">CLOSE</button></div>').join('');refreshTradePriceLines(d.trades);
  }catch(e){list.innerHTML='<div class="position-empty">Could not load open trades. Try refreshing.</div>'}
 }
 
