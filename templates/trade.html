@@ -95,7 +95,12 @@ function updateLiveCandle(price,eventMs){
 }
 function connectLiveKline(){
  if(liveTradeSocket){try{liveTradeSocket.onclose=null;liveTradeSocket.close()}catch(e){}liveTradeSocket=null}
- try{const ts=new WebSocket('wss://stream.binance.com:9443/ws/'+currentSymbol.toLowerCase()+'@trade');liveTradeSocket=ts;ts.onmessage=(ev)=>{if(liveTradeSocket!==ts)return;try{const d=JSON.parse(ev.data),price=Number(d.p),eventMs=Number(d.T)||Date.now();if(price>0){lastLivePrice=price;document.getElementById('price').textContent=fmt(price);document.getElementById('source').textContent='Live trade price';updateLiveCandle(price,eventMs);}}catch(e){}};ts.onerror=()=>{};}catch(e){}};ts.onerror=()=>{};}catch(e){}
+ try{
+  const ts=new WebSocket('wss://stream.binance.com:9443/ws/'+currentSymbol.toLowerCase()+'@trade');
+  liveTradeSocket=ts;
+  ts.onmessage=(ev)=>{if(liveTradeSocket!==ts)return;try{const d=JSON.parse(ev.data),price=Number(d.p),eventMs=Number(d.T)||Date.now();if(price>0){lastLivePrice=price;document.getElementById('price').textContent=fmt(price);document.getElementById('source').textContent='Live trade price';updateLiveCandle(price,eventMs);}}catch(e){}};
+  ts.onerror=()=>{};
+ }catch(e){}
  if(liveKlineSocket){try{liveKlineSocket.onclose=null;liveKlineSocket.close()}catch(e){}liveKlineSocket=null}
  candleCloseAt=0;updateCandleClock();
  if(!('WebSocket' in window)){document.getElementById('feedNote').textContent='Live stream unavailable';return}
