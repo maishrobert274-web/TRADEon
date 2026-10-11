@@ -220,42 +220,53 @@ def api_trade():
         cur = con.execute("INSERT INTO trades (user_id,pair,side,amount,entry_price,status) VALUES (?,?,?,?,?,'OPEN')", (session["user_id"], pair, side, amount, price))
         trade_id = cur.lastrowid
     return {"ok": True, "trade_id": trade_id, "pair": pair, "side": side, "amount": amount, "entry_price": price, "status": "OPEN"}
+MARKET_CACHE = {}
+MARKET_CACHE_SECONDS = 15
+
 @app.route("/api/market")
 def market_price():
-    # Read-only public market data is available before registration.
+    # Public market data is cached briefly to reduce repeated network calls.
     symbol = request.args.get("symbol", "BTCUSDT").upper()
     allowed = {"BTCUSDT", "ETHUSDT", "SOLUSDT"}
     if symbol not in allowed:
         return {"error": "unsupported symbol"}, 400
+    cached = MARKET_CACHE.get(symbol)
+    now = datetime.now().timestamp()
+    if cached and now - cached["cached_at"] < MARKET_CACHE_SECONDS:
+        return {key: value for key, value in cached.items() if key != "cached_at"}
     try:
         response = requests.get(
             "https://data-api.binance.vision/api/v3/ticker/24hr",
             params={"symbol": symbol},
-            timeout=10
+            timeout=(1.5, 2.5)
         )
         response.raise_for_status()
         data = response.json()
-        return {
+        result = {
             "symbol": symbol,
             "price": float(data["lastPrice"]),
             "change_percent": float(data["priceChangePercent"]),
             "source": "Binance"
         }
+        MARKET_CACHE[symbol] = {**result, "cached_at": datetime.now().timestamp()}
+        return result
     except (requests.RequestException, KeyError, ValueError):
-        # Coinbase is a backup if Binance market data is blocked from the hosting service.
+        # Quickly fall back if Binance is blocked or slow from the hosting service.
         products = {"BTCUSDT": "BTC-USD", "ETHUSDT": "ETH-USD", "SOLUSDT": "SOL-USD"}
         try:
             response = requests.get(
                 f"https://api.exchange.coinbase.com/products/{products[symbol]}/stats",
                 headers={"User-Agent": "TRADEON-market-price"},
-                timeout=10
+                timeout=(1.5, 2.5)
             )
             response.raise_for_status()
             data = response.json()
             last = float(data["last"])
             open_price = float(data["open"])
             change = ((last - open_price) / open_price * 100) if open_price else 0
-            return {"symbol": symbol, "price": last, "change_percent": change, "source": "Coinbase (USD estimate)"}
+            result = {"symbol": symbol, "price": last, "change_percent": change, "source": "Coinbase (USD estimate)"}
+            MARKET_CACHE[symbol] = {**result, "cached_at": datetime.now().timestamp()}
+            return result
         except (requests.RequestException, KeyError, ValueError):
             return {"error": "Market data is temporarily unavailable from both providers."}, 503
 
