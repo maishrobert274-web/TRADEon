@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session
 from werkzeug.security import generate_password_hash, check_password_hash
-import sqlite3, os, random, time, requests, base64
+import sqlite3, os, requests, base64
 from datetime import datetime
 
 app = Flask(__name__)
@@ -31,30 +31,6 @@ def normalize_phone(phone):
     if p.startswith("254"):
         return "+" + p
     return p
-
-def send_otp(phone, otp):
-    api_key = os.environ.get("AT_API_KEY")
-    username = os.environ.get("AT_USERNAME", "sandbox")
-    sender = os.environ.get("AT_SENDER_ID", "")
-    if not api_key:
-        return False
-    data = {
-        "username": username,
-        "to": phone,
-        "message": f"Your TRADEON verification code is {otp}. It expires in 5 minutes."
-    }
-    if sender:
-        data["from"] = sender
-    try:
-        response = requests.post(
-            "https://api.africastalking.com/version1/messaging",
-            headers={"apiKey": api_key, "Accept": "application/json"},
-            data=data,
-            timeout=15
-        )
-        return response.status_code < 300
-    except requests.RequestException:
-        return False
 
 @app.route("/")
 def home():
@@ -91,33 +67,6 @@ def register():
             except sqlite3.IntegrityError:
                 error = "That phone number is already registered."
     return render_template("register.html", error=error)
-
-@app.route("/verify-phone", methods=["GET", "POST"])
-def verify_phone():
-    if "verify_user_id" not in session:
-        return redirect(url_for("register"))
-    error = None
-    if request.method == "POST":
-        code = request.form.get("code", "").strip()
-        if time.time() > session.get("verify_expires", 0):
-            error = "The code has expired. Please register again."
-        elif check_password_hash(session.get("verify_otp_hash", ""), code):
-            with sqlite3.connect(DB) as con:
-                user = con.execute(
-                    "SELECT id,name FROM users WHERE id=?",
-                    (session["verify_user_id"],)
-                ).fetchone()
-                if not user:
-                    return redirect(url_for("register"))
-                con.execute("UPDATE users SET verified=1 WHERE id=?", (user[0],))
-            session["user_id"] = user[0]
-            session["user_name"] = user[1]
-            for key in ("verify_user_id", "verify_otp_hash", "verify_expires"):
-                session.pop(key, None)
-            return redirect(url_for("home"))
-        else:
-            error = "Incorrect verification code."
-    return render_template("verify_phone.html", error=error)
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
