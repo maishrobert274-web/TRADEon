@@ -10,6 +10,7 @@
 </head>
 <body>
 <header class="top"><div class="brand">TRADE<span>ON</span></div><div class="navlinks"><a href="/">Home</a><a href="/trades">Trades</a><a href="/signals">Insights</a><a href="/signals">AI Trader</a><a href="/logout">Log out</a></div><div class="balance">DEMO KSh <span id="balance">{{ "%.2f"|format(demo_balance) }}</span></div></header>
+<div style="display:flex;gap:8px;padding:10px 14px;background:#151a21;border-bottom:1px solid #29313a"><input id="assetSearch" type="search" placeholder="Search markets…" oninput="filterMarkets(this.value)" style="flex:1;min-width:0;background:#0e1319;border:1px solid #35404d;border-radius:8px;padding:10px;color:#e8edf2"><a class="nav-tab" href="/signals">Chats</a><a class="nav-tab" href="/signals">Notifications</a></div>
 <nav class="platform-nav" aria-label="Trading sections">
 <button class="nav-tab selected" type="button" onclick="selectPlatformMode('fixed',this)">Fixed Time</button>
 <button class="nav-tab" type="button" onclick="selectPlatformMode('classic',this)">Classic Mode</button>
@@ -21,7 +22,7 @@
 <main class="wrap">
 <section>
 <div class="card">
-<div class="marketbar"><button class="pair active" data-pair="BTC/USDT" data-symbol="BTCUSDT" onclick="choosePair(this)">BTC/USDT</button><button class="pair" data-pair="ETH/USDT" data-symbol="ETHUSDT" onclick="choosePair(this)">ETH/USDT</button><button class="pair" data-pair="SOL/USDT" data-symbol="SOLUSDT" onclick="choosePair(this)">SOL/USDT</button></div>
+<div class="marketbar" id="marketList"><button class="pair active" data-pair="BTC/USDT" data-symbol="BTCUSDT" onclick="choosePair(this)">BTC/USDT</button><button class="pair" data-pair="ETH/USDT" data-symbol="ETHUSDT" onclick="choosePair(this)">ETH/USDT</button><button class="pair" data-pair="SOL/USDT" data-symbol="SOLUSDT" onclick="choosePair(this)">SOL/USDT</button></div>
 <div class="pricehead"><div><div class="symbol" id="symbol">BTC/USDT</div><div class="price" id="price">Loading price…</div></div><div style="text-align:right"><div class="change" id="change">--</div><div class="muted" id="source">Getting market data</div></div></div>
 <div class="chart"><canvas id="chart" aria-label="Market price chart"></canvas></div>
 <div class="chartfoot"><span id="chartStatus">Loading historical market data…</span><span>Illustrative market feed</span></div>
@@ -44,6 +45,7 @@
 let currentSymbol='BTCUSDT', currentPair='BTC/USDT', countdownTimer=null;
 const fmt=n=>Number(n).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:8});
 function setAmount(n){document.getElementById('amount').value=n}
+function filterMarkets(q){const query=q.trim().toLowerCase();document.querySelectorAll("#marketList .pair").forEach(b=>{b.hidden=!b.dataset.pair.toLowerCase().includes(query)})}
 function selectPlatformMode(mode,button){document.querySelectorAll('.platform-nav .nav-tab').forEach(b=>b.classList.remove('selected'));button.classList.add('selected');const selector=document.getElementById('orderType');if(mode==='fixed'){selector.value='duration'}else{selector.value='spot'}updateTradeMode();document.querySelector('.panel').scrollIntoView({behavior:'smooth',block:'center'});document.getElementById('tradeStatus').textContent=mode==='pro'?'Pro layout selected. Advanced chart tools are being developed; trading remains demo-only.':mode==='classic'?'Classic demo Buy/Sell mode selected.':'Fixed Time demo mode selected. Choose an expiry and amount.'}
 function toggleMore(){const m=document.getElementById('moreMenu');m.hidden=!m.hidden}
 function updateTradeMode(){const duration=document.getElementById('orderType').value==='duration';document.getElementById('durationBox').hidden=!duration;document.getElementById('upButton').textContent=duration?'UP':'BUY';document.getElementById('downButton').textContent=duration?'DOWN':'SELL';document.getElementById('tradeStatus').textContent=duration?'Short-duration demo trades settle after the selected timer.':'Spot mode is simulated; no exchange order is placed.'}
