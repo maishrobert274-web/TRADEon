@@ -274,14 +274,35 @@ def manager_auto_signals():
     if pair not in symbols:
         return redirect(url_for("manager_signals") + "?auto=unsupported")
     try:
-        response = requests.get(
-            "https://data-api.binance.vision/api/v3/klines",
-            params={"symbol": symbols[pair], "interval": "1h", "limit": 60},
-            timeout=15
-        )
-        response.raise_for_status()
-        candles = response.json()
-        closes = [float(candle[4]) for candle in candles[:-1]]
+        try:
+            response = requests.get(
+                "https://data-api.binance.vision/api/v3/klines",
+                params={"symbol": symbols[pair], "interval": "1h", "limit": 60},
+                timeout=15
+            )
+            response.raise_for_status()
+            candles = response.json()
+            closes = [float(candle[4]) for candle in candles[:-1]]
+        except requests.RequestException as binance_error:
+            # Render may be blocked by Binance. Fall back to Coinbase's free public hourly candles.
+            coinbase_products = {
+                "BTC/USDT": "BTC-USD",
+                "ETH/USDT": "ETH-USD",
+                "SOL/USDT": "SOL-USD"
+            }
+            response = requests.get(
+                f"https://api.exchange.coinbase.com/products/{coinbase_products[pair]}/candles",
+                params={"granularity": 3600},
+                headers={"User-Agent": "TRADEON-market-signal-test"},
+                timeout=15
+            )
+            response.raise_for_status()
+            candles = sorted(response.json(), key=lambda candle: candle[0])
+            closes = [float(candle[4]) for candle in candles[:-1]]
+            app.logger.warning(
+                "Binance rejected market data; Coinbase public candles used instead: %s",
+                binance_error
+            )
         if len(closes) < 30:
             return redirect(url_for("manager_signals") + "?auto=data_error")
         def ema(values, period):
