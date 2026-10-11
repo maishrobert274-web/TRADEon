@@ -28,7 +28,7 @@
 
 
 </main>
-<section class="below-actions"><div class="trade-amount"><label class="label" for="amount">Amount (KSh)</label><input id="amount" class="amount" type="number" min="10" max="10000" step="10" value="100"><div class="presets"><button type="button" onclick="setAmount(100)">100</button><button type="button" onclick="setAmount(500)">500</button><button type="button" onclick="setAmount(1000)">1,000</button></div><label class="label" for="orderType">Mode</label><select id="orderType" class="duration" onchange="updateTradeMode()"><option value="spot">Spot</option><option value="duration">Fixed time</option></select><div id="durationBox" hidden><label class="label" for="tradeDuration">Expiry</label><select id="tradeDuration" class="duration"><option value="30">30 seconds</option><option value="60">1 minute</option><option value="300">5 minutes</option><option value="900">15 minutes</option></select></div></div><div class="actions"><button class="buy" id="upButton" onclick="placeTrade(document.getElementById('orderType').value==='duration'?'UP':'BUY')">BUY / UP</button><button class="sell" id="downButton" onclick="placeTrade(document.getElementById('orderType').value==='duration'?'DOWN':'SELL')">SELL / DOWN</button></div><div id="tradeStatus" class="status">Demo trading only. No real order is placed.</div><div id="tradeCountdown" class="status" aria-live="polite"></div></section>
+<section class="below-actions"><div class="trade-amount"><label class="label" for="amount">Amount (KSh)</label><input id="amount" class="amount" type="number" min="10" max="10000" step="10" value="100"><div class="presets"><button type="button" onclick="setAmount(100)">100</button><button type="button" onclick="setAmount(500)">500</button><button type="button" onclick="setAmount(1000)">1,000</button></div><label class="label" for="orderType">Mode</label><select id="orderType" class="duration" onchange="updateTradeMode()"><option value="spot">Spot</option><option value="duration">Fixed time</option></select><div id="durationBox" hidden><label class="label" for="tradeDuration">Expiry</label><select id="tradeDuration" class="duration"><option value="5">5 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option><option value="60">1 minute</option></select></div></div><div class="actions"><button class="buy" id="upButton" onclick="placeTrade(document.getElementById('orderType').value==='duration'?'UP':'BUY')">BUY / UP</button><button class="sell" id="downButton" onclick="placeTrade(document.getElementById('orderType').value==='duration'?'DOWN':'SELL')">SELL / DOWN</button></div><div id="tradeStatus" class="status">Demo trading only. No real order is placed.</div><div id="tradeCountdown" class="status" aria-live="polite"></div></section>
 
 
 <section class="open-positions">
@@ -47,7 +47,7 @@
 
 <script src="https://unpkg.com/lightweight-charts@5.0.8/dist/lightweight-charts.standalone.production.js"></script>
 <script>
-let currentSymbol='BTCUSDT', currentPair='BTC/USDT', countdownTimer=null, liveKlineSocket=null, candleCloseAt=0, candleClockTimer=null;
+let currentSymbol='BTCUSDT', currentPair='BTC/USDT', countdownTimer=null, liveKlineSocket=null, liveTradeSocket=null, candleCloseAt=0, candleClockTimer=null, lastLivePrice=0, orderPending=false;
 const fmt=n=>Number(n).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:8});
 function setAmount(n){document.getElementById('amount').value=n}
 function filterMarkets(q){const query=q.trim().toLowerCase();document.querySelectorAll("#marketList .pair").forEach(b=>{b.hidden=!b.dataset.pair.toLowerCase().includes(query)})}
@@ -57,7 +57,7 @@ function updateTradeMode(){const duration=document.getElementById('orderType').v
 function showCountdown(seconds,tradeId){if(countdownTimer)clearInterval(countdownTimer);const el=document.getElementById('tradeCountdown');let end=Date.now()+seconds*1000;function tick(){const left=Math.max(0,Math.ceil((end-Date.now())/1000));el.textContent=left>0?'Position #'+tradeId+' expires in '+left+'s':'Expiry reached — checking result…';if(left<=0)clearInterval(countdownTimer)}tick();countdownTimer=setInterval(tick,250)}
 async function settleDue(){try{const r=await fetch('/api/trades/settle-due',{method:'POST'});if(r.ok){const d=await r.json();if(d.settled&&d.settled.length){document.getElementById('tradeStatus').textContent=d.settled.map(t=>'Trade #'+t.trade_id+': '+(t.won?'WIN':'LOSS')+' · demo P/L KSh '+Number(t.pnl).toFixed(2)).join(' | ');location.reload()}}}catch(e){}}
 function choosePair(button){currentSymbol=button.dataset.symbol;currentPair=button.dataset.pair;document.getElementById('symbol').textContent=currentPair;document.querySelectorAll('.pair').forEach(b=>b.classList.toggle('active',b===button));loadPrice();loadChart();connectLiveKline()}
-async function loadPrice(){const p=document.getElementById('price'),ch=document.getElementById('change'),src=document.getElementById('source');try{const r=await fetch('/api/market?symbol='+encodeURIComponent(currentSymbol));const d=await r.json();if(!r.ok)throw Error(d.error||'unavailable');p.textContent=fmt(d.price);ch.textContent=(d.change_percent>=0?'+':'')+Number(d.change_percent).toFixed(2)+'%';ch.style.color=d.change_percent>=0?'#27d99a':'#ff6b6b';src.textContent='Source: '+(d.source||'market data')}catch(e){p.textContent='Price unavailable';ch.textContent='--';src.textContent='Market feed temporarily unavailable'}}
+async function loadPrice(){const p=document.getElementById('price'),ch=document.getElementById('change'),src=document.getElementById('source');try{const r=await fetch('/api/market?symbol='+encodeURIComponent(currentSymbol));const d=await r.json();if(!r.ok)throw Error(d.error||'unavailable');lastLivePrice=Number(d.price)||lastLivePrice;p.textContent=fmt(d.price);ch.textContent=(d.change_percent>=0?'+':'')+Number(d.change_percent).toFixed(2)+'%';ch.style.color=d.change_percent>=0?'#27d99a':'#ff6b6b';src.textContent='Source: '+(d.source||'market data')}catch(e){p.textContent='Price unavailable';ch.textContent='--';src.textContent='Market feed temporarily unavailable'}}
 let chartType='candles', chartInterval='1h', tvChart=null, tvSeries=null, tvResizeObserver=null, chartBusy=false;
 document.querySelectorAll('.chart-types button').forEach(b=>b.classList.toggle('selected',b.dataset.chart==='candles'));
 function initTvChart(){
@@ -86,6 +86,8 @@ async function fetchChartWithTimeout(url,ms=5000){const controller=new AbortCont
 
 function updateCandleClock(){const el=document.getElementById('candleCountdown');if(!el)return;if(!candleCloseAt){el.textContent='Candle closes in --:--';return}const seconds=Math.max(0,Math.ceil((candleCloseAt-Date.now())/1000));const mins=Math.floor(seconds/60),secs=seconds%60;el.textContent='Candle closes in '+String(mins).padStart(2,'0')+':'+String(secs).padStart(2,'0')}
 function connectLiveKline(){
+ if(liveTradeSocket){try{liveTradeSocket.onclose=null;liveTradeSocket.close()}catch(e){}liveTradeSocket=null}
+ try{const ts=new WebSocket('wss://stream.binance.com:9443/ws/'+currentSymbol.toLowerCase()+'@trade');liveTradeSocket=ts;ts.onmessage=(ev)=>{if(liveTradeSocket!==ts)return;try{const d=JSON.parse(ev.data),price=Number(d.p);if(price>0){lastLivePrice=price;document.getElementById('price').textContent=fmt(price);document.getElementById('source').textContent='Live trade price';}}catch(e){}};ts.onerror=()=>{};}catch(e){}
  if(liveKlineSocket){try{liveKlineSocket.onclose=null;liveKlineSocket.close()}catch(e){}liveKlineSocket=null}
  candleCloseAt=0;updateCandleClock();
  if(!('WebSocket' in window)){document.getElementById('feedNote').textContent='Live stream unavailable';return}
@@ -101,7 +103,7 @@ function connectLiveKline(){
     if(!Object.values(candle).every(Number.isFinite))return;
     if(chartType==='line'||chartType==='area')tvSeries.update({time:candle.time,value:candle.close});else tvSeries.update(candle);
     candleCloseAt=Number(k.T);updateCandleClock();
-    const p=document.getElementById('price');if(p)p.textContent=fmt(candle.close);
+    lastLivePrice=candle.close;const p=document.getElementById('price');if(p)p.textContent=fmt(candle.close);
     const s=document.getElementById('source');if(s)s.textContent='Live Binance price';
     const st=document.getElementById('chartStatus');if(st)st.textContent='Live candle updating · '+chartInterval;
    }catch(e){}
@@ -178,7 +180,24 @@ async function closeOpenTrade(id,button){
   await loadOpenPositions();
  }catch(e){note.textContent=e.message||'Could not close trade.';button.disabled=false;button.textContent='RETRY'}
 }
-async function placeTrade(side){const amount=Number(document.getElementById('amount').value),status=document.getElementById('tradeStatus');if(!Number.isFinite(amount)||amount<10||amount>10000){status.textContent='Enter a demo amount between KSh 10 and KSh 10,000.';return}status.textContent='Getting current price and recording demo order…';try{const r=await fetch('/api/trade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pair:currentPair,side,amount,mode:document.getElementById('orderType').value==='duration'?'DURATION':'SPOT',duration_seconds:Number(document.getElementById('tradeDuration').value)})});const d=await r.json();if(!r.ok)throw Error(d.error||'Order failed');const b=Number(document.getElementById('balance').textContent.replace(/,/g,''));document.getElementById('balance').textContent=Math.max(0,b-amount).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});status.textContent=(d.mode==='DURATION'?'Demo '+side+' position #'+d.trade_id+' opened at '+fmt(d.entry_price)+'.':'Demo '+side+' order #'+d.trade_id+' recorded at '+fmt(d.entry_price)+'.')+' No real trade was placed.';if(d.mode==='DURATION')showCountdown(d.duration_seconds,d.trade_id); }catch(e){status.textContent=e.message||'Could not record demo order.'}}
-loadPrice();setTimeout(loadChart,250);setTimeout(connectLiveKline,500);loadOpenPositions();if(!candleClockTimer)candleClockTimer=setInterval(updateCandleClock,250);setInterval(settleDue,2000);setInterval(loadPrice,5000);setInterval(loadChart,15000);setInterval(loadOpenPositions,10000);window.addEventListener('resize',()=>{if(tvChart){const host=document.getElementById('tvChart');tvChart.applyOptions({width:Math.max(280,host.clientWidth),height:Math.max(260,host.clientHeight)})}});
+async function placeTrade(side){
+ if(orderPending)return;
+ const amount=Number(document.getElementById('amount').value),status=document.getElementById('tradeStatus');
+ if(!Number.isFinite(amount)||amount<10||amount>10000){status.textContent='Enter a demo amount between KSh 10 and KSh 10,000.';return}
+ if(!(lastLivePrice>0)){status.textContent='Waiting for a live market price. Please try again in a moment.';return}
+ orderPending=true;const buttons=[document.getElementById('upButton'),document.getElementById('downButton')];buttons.forEach(b=>{b.disabled=true;b.style.opacity='.65'});
+ status.textContent='Recording demo order…';
+ try{
+  const mode=document.getElementById('orderType').value==='duration'?'DURATION':'SPOT';
+  const r=await fetch('/api/trade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pair:currentPair,side,amount,mode,duration_seconds:Number(document.getElementById('tradeDuration').value),entry_price:lastLivePrice})});
+  const d=await r.json();if(!r.ok)throw Error(d.error||'Order failed');
+  document.getElementById('balance').textContent=Number(d.balance).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});
+  status.textContent=(d.mode==='DURATION'?'Demo '+side+' #'+d.trade_id+' opened at '+fmt(d.entry_price)+'.':'Demo '+side+' #'+d.trade_id+' recorded at '+fmt(d.entry_price)+'.')+' No real order was placed.';
+  if(d.mode==='DURATION')showCountdown(d.duration_seconds,d.trade_id);
+  loadOpenPositions();
+ }catch(e){status.textContent=e.message||'Could not record demo order.'}
+ finally{orderPending=false;buttons.forEach(b=>{b.disabled=false;b.style.opacity='1'})}
+}
+loadPrice();setTimeout(loadChart,250);setTimeout(connectLiveKline,500);loadOpenPositions();if(!candleClockTimer)candleClockTimer=setInterval(updateCandleClock,250);setInterval(settleDue,2000);setInterval(loadPrice,2000);setInterval(loadChart,5000);setInterval(loadOpenPositions,10000);window.addEventListener('resize',()=>{if(tvChart){const host=document.getElementById('tvChart');tvChart.applyOptions({width:Math.max(280,host.clientWidth),height:Math.max(260,host.clientHeight)})}});
 </script>
 </body></html>
