@@ -212,14 +212,18 @@ def api_trade():
     allowed_sides = ("UP", "DOWN") if mode == "DURATION" else ("BUY", "SELL")
     if pair not in symbols or side not in allowed_sides or amount < 10 or mode not in ("SPOT", "DURATION"):
         return {"error": "Invalid demo trade details. Minimum is KSh 10."}, 400
-    if mode == "DURATION" and duration not in (30, 60, 300, 900):
+    if mode == "DURATION" and duration not in (5, 15, 30, 60, 300, 900):
         return {"error": "Choose a supported demo duration."}, 400
     try:
-        response = requests.get("https://data-api.binance.vision/api/v3/ticker/price", params={"symbol": symbols[pair]}, timeout=(1.5, 3))
-        response.raise_for_status()
-        price = float(response.json()["price"])
-    except (requests.RequestException, KeyError, ValueError):
-        return {"error": "Could not get the current market price."}, 503
+        # Demo orders use the latest live price supplied by the page's public market stream
+        # so the button responds quickly instead of waiting on a second market-data request.
+        price = float(data.get("entry_price", 0))
+        if not (price > 0 and price < 1e15):
+            response = requests.get("https://data-api.binance.vision/api/v3/ticker/price", params={"symbol": symbols[pair]}, timeout=(0.8, 1.5))
+            response.raise_for_status()
+            price = float(response.json()["price"])
+    except (requests.RequestException, KeyError, TypeError, ValueError):
+        return {"error": "Could not get the current market price. Please retry."}, 503
     db_side = ("BUY" if side == "UP" else "SELL") if mode == "DURATION" else side
     with sqlite3.connect(DB) as con:
         con.execute("INSERT OR IGNORE INTO demo_wallets (user_id,balance) VALUES (?,10000)", (session["user_id"],))
@@ -229,7 +233,7 @@ def api_trade():
         con.execute("UPDATE demo_wallets SET balance=balance-? WHERE user_id=?", (amount, session["user_id"]))
         cur = con.execute("INSERT INTO trades (user_id,pair,side,amount,entry_price,status,mode,duration_seconds,expires_at) VALUES (?,?,?,?,?,'OPEN',?,?,CASE WHEN ? > 0 THEN datetime('now', '+' || ? || ' seconds') ELSE NULL END)", (session["user_id"], pair, db_side, amount, price, mode, duration if mode == "DURATION" else None, duration if mode == "DURATION" else 0, duration if mode == "DURATION" else 0))
         trade_id = cur.lastrowid
-    return {"ok": True, "trade_id": trade_id, "pair": pair, "side": side, "mode": mode, "duration_seconds": duration if mode == "DURATION" else None, "entry_price": price, "status": "OPEN"}
+    return {"ok": True, "trade_id": trade_id, "pair": pair, "side": side, "mode": mode, "duration_seconds": duration if mode == "DURATION" else None, "entry_price": price, "balance": round(balance - amount, 2), "status": "OPEN"}
 
 
 @app.route("/api/trades/open")
