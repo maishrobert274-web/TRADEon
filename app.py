@@ -230,6 +230,29 @@ def api_trade():
         cur = con.execute("INSERT INTO trades (user_id,pair,side,amount,entry_price,status) VALUES (?,?,?,?,?,'OPEN')", (session["user_id"], pair, side, amount, price))
         trade_id = cur.lastrowid
     return {"ok": True, "trade_id": trade_id, "pair": pair, "side": side, "amount": amount, "entry_price": price, "status": "OPEN"}
+@app.route("/trades/<int:trade_id>/close", methods=["POST"])
+def close_demo_trade(trade_id):
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    symbols = {"BTC/USDT": "BTCUSDT", "ETH/USDT": "ETHUSDT", "SOL/USDT": "SOLUSDT"}
+    with sqlite3.connect(DB) as con:
+        row = con.execute("SELECT pair,side,amount,entry_price,status FROM trades WHERE id=? AND user_id=?", (trade_id, session["user_id"])).fetchone()
+        if not row or row[4] != "OPEN" or row[0] not in symbols:
+            return redirect(url_for("trades"))
+        try:
+            response = requests.get("https://data-api.binance.vision/api/v3/ticker/price", params={"symbol": symbols[row[0]]}, timeout=(1.5, 3))
+            response.raise_for_status()
+            exit_price = float(response.json()["price"])
+        except (requests.RequestException, KeyError, ValueError):
+            return redirect(url_for("trades") + "?close=price_unavailable")
+        entry_price, amount = float(row[3]), float(row[2])
+        direction = 1 if row[1] == "BUY" else -1
+        pnl = round(amount * ((exit_price - entry_price) / entry_price) * direction, 2) if entry_price else 0
+        con.execute("UPDATE trades SET status='CLOSED',pnl=?,closed_at=CURRENT_TIMESTAMP WHERE id=? AND user_id=? AND status='OPEN'", (pnl, trade_id, session["user_id"]))
+        con.execute("INSERT OR IGNORE INTO demo_wallets (user_id,balance) VALUES (?,10000)", (session["user_id"],))
+        con.execute("UPDATE demo_wallets SET balance=balance+? WHERE user_id=?", (amount + pnl, session["user_id"]))
+    return redirect(url_for("trades") + "?closed=1")
+
 MARKET_CACHE = {}
 MARKET_CACHE_SECONDS = 15
 
