@@ -370,10 +370,9 @@ def signals():
     for s in rows:
         action_class = "buy" if s[2] == "BUY" else "sell"
         cards += f"""<div class="card">
-            <div class="top"><h2>{s[1]}</h2><span class="{action_class}">{s[2]}</span></div>
-            <p><b>Strength:</b> {s[6]}</p>
-            <p><b>Entry:</b> {s[3] or '-'} &nbsp; <b>Stop Loss:</b> {s[4] or '-'} &nbsp; <b>Take Profit:</b> {s[5] or '-'}</p>
-            <p>{s[7] or ''}</p>
+            <div class="signal-top"><h2>{s[1]}</h2><span class="{action_class}">{s[2]}</span></div>
+            <div class="details"><div class="detail">Entry<b>{s[3] or '-'}</b></div><div class="detail">Stop loss<b>{s[4] or '-'}</b></div><div class="detail">Take profit<b>{s[5] or '-'}</b></div></div>
+            <p class="note"><b>Strength:</b> {s[6]}<br>{s[7] or ''}</p>
             <small>Published: {s[8]}</small>
         </div>"""
     if not cards:
@@ -381,13 +380,46 @@ def signals():
     return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
     <title>TRADEON Signals</title>
     <style>
-    body{{font-family:Arial;margin:0;background:#f5f7fa;color:#111}}header{{background:#111;color:white;padding:18px 5%}}
-    main{{padding:24px 5%;max-width:900px;margin:auto}}.card{{background:white;padding:18px;border-radius:12px;margin:12px 0;box-shadow:0 2px 8px #0001}}
-    .top{{display:flex;justify-content:space-between;align-items:center}}.buy{{color:green;font-size:22px;font-weight:bold}}.sell{{color:#c00;font-size:22px;font-weight:bold}}
-    a{{color:white;text-decoration:none}}
-    </style></head><body><header><b>TRADEON — SIGNALS</b> &nbsp; <a href="/">Dashboard</a></header>
-    <main><h1>Trading Signals</h1><p>Signals published by the TradeOn Manager. Trading involves risk.</p>{cards}</main></body></html>"""
+    *{{box-sizing:border-box}}body{{font-family:Arial,sans-serif;margin:0;background:#0b0e11;color:#e8edf2}}
+    header{{background:#151a21;border-bottom:1px solid #29313a;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0}}
+    .brand{{font-size:20px;font-weight:900;letter-spacing:.4px}}.brand span{{color:#20c997}}header a{{color:#c5d0dc;text-decoration:none;font-size:13px}}
+    main{{padding:16px;max-width:1000px;margin:auto}}h1{{font-size:22px;margin:8px 0}}.intro{{color:#8c98a7;font-size:13px;margin-bottom:16px}}
+    .card{{background:#151a21;border:1px solid #29313a;padding:16px;border-radius:12px;margin:12px 0}}
+    .signal-top{{display:flex;justify-content:space-between;align-items:center;gap:10px}}.signal-top h2{{font-size:17px;margin:0}}
+    .buy,.sell{{font-size:13px;font-weight:900;padding:7px 10px;border-radius:7px}}.buy{{color:#a5f3c4;background:#183b31}}.sell{{color:#ffb4b4;background:#482426}}
+    .details{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}}.detail{{background:#0e1319;border:1px solid #29313a;border-radius:8px;padding:10px;font-size:12px;color:#9aa5b1}}.detail b{{display:block;color:#e8edf2;margin-top:5px;overflow-wrap:anywhere}}
+    .note{{font-size:13px;line-height:1.5}}small{{color:#8c98a7}}.shortcut-grid{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:10px;max-width:1000px;margin:0 auto 14px}}
+    .shortcut{{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:54px;text-decoration:none;color:#dce5ed;background:#202833;border:1px solid #303b48;border-radius:9px;padding:8px 3px;font-size:11px;font-weight:800}}
+    .shortcut-icon{{font-size:17px;color:#20c997}}@media(max-width:500px){{main{{padding:10px}}.card{{padding:12px}}.details{{gap:5px}}.detail{{padding:7px 5px;font-size:10px}}.signal-top h2{{font-size:15px}}header{{padding:12px 10px}}.brand{{font-size:18px}}}}
+    </style></head><body><header><div class="brand">TRADE<span>ON</span></div><a href="/trade">← Back to trading</a></header>
+    <main><h1>Insights</h1><p class="intro">Signals published by the TRADEON Manager. Market signals are informational and are not guaranteed results.</p>{cards}</main>
+    <nav class="shortcut-grid" aria-label="Main sections">
+    <a class="shortcut" href="/trades"><span class="shortcut-icon">↔</span><span>Trades</span></a>
+    <a class="shortcut" href="/signals"><span class="shortcut-icon">◈</span><span>Insights</span></a>
+    <a class="shortcut" href="/social-trading"><span class="shortcut-icon">◎</span><span>Social Trading</span></a>
+    <a class="shortcut" href="/deposit"><span class="shortcut-icon">＋</span><span>Deposit</span></a></nav></body></html>"""
 
+
+@app.route("/social-trading")
+def social_trading():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    return """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>TRADEON — Social Trading</title><style>
+    *{box-sizing:border-box}body{margin:0;background:#0b0e11;color:#e8edf2;font-family:Arial,sans-serif}
+    header{background:#151a21;border-bottom:1px solid #29313a;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0}
+    .brand{font-size:20px;font-weight:900}.brand span{color:#20c997}a{color:#c5d0dc;text-decoration:none;font-size:13px}
+    main{max-width:900px;margin:auto;padding:16px}.muted{color:#8c98a7;font-size:13px;line-height:1.5}
+    .card{background:#151a21;border:1px solid #29313a;border-radius:12px;padding:16px;margin:12px 0}
+    .card h2{font-size:17px;margin:0 0 8px}.pill{display:inline-block;background:#183b31;color:#a5f3c4;border-radius:6px;padding:6px 9px;font-size:11px;font-weight:bold}
+    .shortcut-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:10px;max-width:900px;margin:0 auto 14px}
+    .shortcut{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:54px;text-decoration:none;color:#dce5ed;background:#202833;border:1px solid #303b48;border-radius:9px;padding:8px 3px;font-size:11px;font-weight:800}
+    .shortcut-icon{font-size:17px;color:#20c997}@media(max-width:500px){header{padding:12px 10px}.brand{font-size:18px}main{padding:10px}.card{padding:13px}}
+    </style></head><body><header><div class="brand">TRADE<span>ON</span></div><a href="/trade">← Back to trading</a></header>
+    <main><h1>Social Trading</h1><p class="muted">Follow TRADEON market discussions and learn how other traders analyse the market.</p>
+    <div class="card"><span class="pill">COMING NEXT</span><h2>Trader community</h2><p class="muted">The community feed and trader profiles are not active yet. For now, use Insights to view signals published by the TRADEON Manager.</p><a href="/signals">Open Insights →</a></div>
+    <div class="card"><h2>Stay in control</h2><p class="muted">Signals and demo trades are for learning only. Never assume another trader's results will repeat.</p></div></main>
+    <nav class="shortcut-grid" aria-label="Main sections"><a class="shortcut" href="/trades"><span class="shortcut-icon">↔</span><span>Trades</span></a><a class="shortcut" href="/signals"><span class="shortcut-icon">◈</span><span>Insights</span></a><a class="shortcut" href="/social-trading"><span class="shortcut-icon">◎</span><span>Social Trading</span></a><a class="shortcut" href="/deposit"><span class="shortcut-icon">＋</span><span>Deposit</span></a></nav></body></html>"""
 
 @app.route("/manager/auto-signals", methods=["POST"])
 def manager_auto_signals():
