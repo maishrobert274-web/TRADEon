@@ -219,7 +219,7 @@ def market_price():
         return {"error": "unsupported symbol"}, 400
     try:
         response = requests.get(
-            "https://api.binance.com/api/v3/ticker/24hr",
+            "https://data-api.binance.vision/api/v3/ticker/24hr",
             params={"symbol": symbol},
             timeout=10
         )
@@ -228,10 +228,26 @@ def market_price():
         return {
             "symbol": symbol,
             "price": float(data["lastPrice"]),
-            "change_percent": float(data["priceChangePercent"])
+            "change_percent": float(data["priceChangePercent"]),
+            "source": "Binance"
         }
     except (requests.RequestException, KeyError, ValueError):
-        return {"error": "market data temporarily unavailable"}, 503
+        # Coinbase is a backup if Binance market data is blocked from the hosting service.
+        products = {"BTCUSDT": "BTC-USD", "ETHUSDT": "ETH-USD", "SOLUSDT": "SOL-USD"}
+        try:
+            response = requests.get(
+                f"https://api.exchange.coinbase.com/products/{products[symbol]}/stats",
+                headers={"User-Agent": "TRADEON-market-price"},
+                timeout=10
+            )
+            response.raise_for_status()
+            data = response.json()
+            last = float(data["last"])
+            open_price = float(data["open"])
+            change = ((last - open_price) / open_price * 100) if open_price else 0
+            return {"symbol": symbol, "price": last, "change_percent": change, "source": "Coinbase (USD estimate)"}
+        except (requests.RequestException, KeyError, ValueError):
+            return {"error": "Market data is temporarily unavailable from both providers."}, 503
 
 @app.route("/signals")
 def signals():
@@ -415,6 +431,25 @@ def manager_signal_toggle(signal_id):
 def trade():
     if "user_id" not in session: return redirect(url_for("login"))
     return render_template("trade.html", user_name=session.get("user_name"))
+
+@app.route("/trades")
+def trades():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    with sqlite3.connect(DB) as con:
+        rows = con.execute(
+            "SELECT pair,side,amount,entry_price,status,created_at FROM trades WHERE user_id=? ORDER BY id DESC LIMIT 100",
+            (session["user_id"],)
+        ).fetchall()
+    table_rows = "".join(
+        f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>KSh {r[2]:,.2f}</td><td>{r[3]:,.8f}</td><td>{r[4]}</td><td>{r[5]}</td></tr>"
+        for r in rows
+    )
+    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Trades</title>
+    <style>body{{font-family:Arial;margin:0;background:#f4f6f8;color:#182230}}header{{background:#101828;color:#fff;padding:18px}}main{{max-width:900px;margin:auto;padding:18px}}.wrap{{overflow:auto}}table{{width:100%;min-width:650px;border-collapse:collapse;background:#fff}}th,td{{padding:12px;text-align:left;border-bottom:1px solid #eee;font-size:13px}}a{{color:#12b76a}}</style></head>
+    <body><header><b>TRADEON — MY TRADES</b></header><main><p><a href="/">← Back to dashboard</a></p><h2>My trades</h2>
+    <p>These are simulated test trades, not orders sent to a cryptocurrency exchange.</p><div class="wrap"><table><tr><th>Pair</th><th>Side</th><th>Amount</th><th>Entry price</th><th>Status</th><th>Date</th></tr>{table_rows or "<tr><td colspan='6'>No trades yet.</td></tr>"}</table></div></main></body></html>"""
+
 
 @app.route("/transactions")
 def transactions():
