@@ -24,7 +24,7 @@
 </div>
 
 </section>
-<aside class="card panel"><div class="demoTag">DEMO MODE</div><h2>Trading</h2><div class="muted">Selected market: <strong id="sidePair">BTC/USDT</strong></div><div class="muted" style="margin-top:5px">Orders are simulated; no exchange execution.</div></aside>
+
 
 
 </main>
@@ -36,7 +36,7 @@
 <a class="shortcut" href="/signals"><span class="shortcut-icon">◎</span><span>Social Trading</span></a>
 <a class="shortcut" href="/deposit"><span class="shortcut-icon">＋</span><span>Deposit</span></a>
 </nav>
-<div class="disclaimer">TRADEON is currently in demo mode. Market feeds may be delayed or unavailable. Demo orders are simulated and do not represent actual exchange execution. Deposits and withdrawals are not proof of live brokerage capability.</div>
+
 <script>
 let currentSymbol='BTCUSDT', currentPair='BTC/USDT', countdownTimer=null;
 const fmt=n=>Number(n).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:8});
@@ -47,7 +47,7 @@ function toggleMore(){const m=document.getElementById('moreMenu');m.hidden=!m.hi
 function updateTradeMode(){const duration=document.getElementById('orderType').value==='duration';document.getElementById('durationBox').hidden=!duration;document.getElementById('upButton').textContent=duration?'UP':'BUY';document.getElementById('downButton').textContent=duration?'DOWN':'SELL';document.getElementById('tradeStatus').textContent=duration?'Short-duration demo trades settle after the selected timer.':'Spot mode is simulated; no exchange order is placed.'}
 function showCountdown(seconds,tradeId){if(countdownTimer)clearInterval(countdownTimer);const el=document.getElementById('tradeCountdown');let end=Date.now()+seconds*1000;function tick(){const left=Math.max(0,Math.ceil((end-Date.now())/1000));el.textContent=left>0?'Position #'+tradeId+' expires in '+left+'s':'Expiry reached — checking result…';if(left<=0)clearInterval(countdownTimer)}tick();countdownTimer=setInterval(tick,250)}
 async function settleDue(){try{const r=await fetch('/api/trades/settle-due',{method:'POST'});if(r.ok){const d=await r.json();if(d.settled&&d.settled.length){document.getElementById('tradeStatus').textContent=d.settled.map(t=>'Trade #'+t.trade_id+': '+(t.won?'WIN':'LOSS')+' · demo P/L KSh '+Number(t.pnl).toFixed(2)).join(' | ');location.reload()}}}catch(e){}}
-function choosePair(button){currentSymbol=button.dataset.symbol;currentPair=button.dataset.pair;document.getElementById('symbol').textContent=currentPair;document.getElementById('sidePair').textContent=currentPair;document.querySelectorAll('.pair').forEach(b=>b.classList.toggle('active',b===button));loadPrice();loadChart()}
+function choosePair(button){currentSymbol=button.dataset.symbol;currentPair=button.dataset.pair;document.getElementById('symbol').textContent=currentPair;document.querySelectorAll('.pair').forEach(b=>b.classList.toggle('active',b===button));loadPrice();loadChart()}
 async function loadPrice(){const p=document.getElementById('price'),ch=document.getElementById('change'),src=document.getElementById('source');try{const r=await fetch('/api/market?symbol='+encodeURIComponent(currentSymbol));const d=await r.json();if(!r.ok)throw Error(d.error||'unavailable');p.textContent=fmt(d.price);ch.textContent=(d.change_percent>=0?'+':'')+Number(d.change_percent).toFixed(2)+'%';ch.style.color=d.change_percent>=0?'#27d99a':'#ff6b6b';src.textContent='Source: '+(d.source||'market data')}catch(e){p.textContent='Price unavailable';ch.textContent='--';src.textContent='Market feed temporarily unavailable'}}
 let chartType='candles', chartInterval='1h';
 function setChartType(type,button){chartType=type;document.querySelectorAll('.chart-types button').forEach(b=>b.classList.toggle('selected',b===button));loadChart()}
