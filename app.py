@@ -18,6 +18,8 @@ def init_db():
         cols = [r[1] for r in con.execute("PRAGMA table_info(users)").fetchall()]
         if "verified" not in cols:
             con.execute("ALTER TABLE users ADD COLUMN verified INTEGER NOT NULL DEFAULT 0")
+        if "country" not in cols:
+            con.execute("ALTER TABLE users ADD COLUMN country TEXT NOT NULL DEFAULT 'Kenya'")
         con.execute("""CREATE TABLE IF NOT EXISTS deposits (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, amount REAL NOT NULL, phone TEXT NOT NULL, merchant_request_id TEXT, checkout_request_id TEXT UNIQUE, mpesa_receipt TEXT, status TEXT NOT NULL DEFAULT "PENDING", created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
         con.execute("""CREATE TABLE IF NOT EXISTS wallets (user_id INTEGER PRIMARY KEY, balance REAL NOT NULL DEFAULT 0)""")
         con.execute("""CREATE TABLE IF NOT EXISTS demo_wallets (user_id INTEGER PRIMARY KEY, balance REAL NOT NULL DEFAULT 10000)""")
@@ -57,15 +59,21 @@ def register():
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         phone = normalize_phone(request.form.get("phone", ""))
+        country = request.form.get("country", "").strip()
         password = request.form.get("password", "")
-        if not name or not phone or len(password) < 6:
-            error = "Enter your name, a valid phone number and a password of at least 6 characters."
+        allowed_countries = {"Kenya", "Uganda", "Tanzania", "Rwanda", "Nigeria", "Ghana", "South Africa", "United States", "United Kingdom", "Canada", "Australia", "India", "Pakistan", "Bangladesh", "Philippines", "Indonesia", "Malaysia", "Singapore", "United Arab Emirates", "Saudi Arabia", "Germany", "France", "Italy", "Spain", "Netherlands", "Brazil", "Mexico", "Japan", "South Korea", "Turkey", "Egypt", "Other"}
+        if not name or not phone or not country or len(password) < 6:
+            error = "Enter your name, country, international phone number and a password of at least 6 characters."
+        elif country not in allowed_countries:
+            error = "Please choose a country from the list."
+        elif not phone.startswith("+") or len("".join(ch for ch in phone if ch.isdigit())) < 8 or len("".join(ch for ch in phone if ch.isdigit())) > 15:
+            error = "Enter your phone number with its international country code, for example +254712345678."
         else:
             try:
                 with sqlite3.connect(DB) as con:
                     cur = con.execute(
-                        "INSERT INTO users (name,phone,password,verified) VALUES (?,?,?,0)",
-                        (name, phone, generate_password_hash(password))
+                        "INSERT INTO users (name,phone,password,verified,country) VALUES (?,?,?,0,?)",
+                        (name, phone, generate_password_hash(password), country)
                     )
                     user_id = cur.lastrowid
                 # Phone verification is disabled for simple registration.
