@@ -275,7 +275,7 @@ def manager_auto_signals():
         return redirect(url_for("manager_signals") + "?auto=unsupported")
     try:
         response = requests.get(
-            "https://api.binance.com/api/v3/klines",
+            "https://data-api.binance.vision/api/v3/klines",
             params={"symbol": symbols[pair], "interval": "1h", "limit": 60},
             timeout=15
         )
