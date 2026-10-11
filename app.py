@@ -746,19 +746,19 @@ def trades():
     <style>*{{box-sizing:border-box}}body{{font-family:Arial;margin:0;background:#0b0e11;color:#e8edf2}}header{{background:#151a21;color:#fff;padding:18px;border-bottom:1px solid #29313a}}main{{max-width:1100px;margin:auto;padding:18px 18px 110px}}.wrap{{overflow:auto;background:#151a21;border:1px solid #29313a;border-radius:10px}}table{{width:100%;min-width:900px;border-collapse:collapse;background:#151a21}}th,td{{padding:12px;text-align:left;border-bottom:1px solid #29313a;font-size:13px}}a{{color:#20c997}}button{{background:#159f6b;color:white;border:0;padding:9px 11px;border-radius:7px;font-weight:700}}.notice{{padding:12px;background:#183b31;border-radius:8px;color:#a5f3c4}}.error{{background:#482426;color:#ffb4b4}}.trades-heading{{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}}.trades-heading h2{{margin:12px 0}}#closeAllButton{{background:#d92d20;color:#fff;border:0;padding:11px 14px;border-radius:8px;font-weight:800}}#closeAllButton:disabled{{opacity:.6}}#closeTradeNotice{{font-size:13px;color:#a5f3c4;min-height:18px}}.bottom-nav{{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));background:#10151b;border-top:1px solid #29313a;box-shadow:0 -6px 20px #0005}}.bottom-nav a{{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:48px;border:1px solid #303b48;border-radius:9px;background:#202833;color:#dce5ed;text-decoration:none;font-size:10px;font-weight:800}}.bottom-nav span{{font-size:16px;color:#20c997}}</style></head>
     <body><header><b>TRADEON — MY DEMO TRADES</b></header><main><p><a href="/trade">← Back to trading</a> · <a href="/">Dashboard</a></p><div class="trades-heading"><h2>My demo trades</h2><button id="closeAllButton" onclick="closeAllTrades()">CLOSE ALL</button></div>
     <p>Orders shown here are simulated and are not sent to a cryptocurrency exchange. P/L is illustrative and does not represent real money.</p>{notice}<p id="closeTradeNotice" aria-live="polite"></p><div class="wrap"><table><tr><th>Pair</th><th>Side</th><th>Amount</th><th>Entry price</th><th>Status</th><th>Demo P/L</th><th>Date</th><th>Action</th></tr>{table_rows or "<tr><td colspan='8'>No trades yet.</td></tr>"}</table></div></main><script>
-async function closeAllTrades(){
+async function closeAllTrades(){{
  const rows=[...document.querySelectorAll('tr[data-status="OPEN"]')];
  const button=document.getElementById('closeAllButton'),note=document.getElementById('closeTradeNotice');
- if(!rows.length){note.textContent='There are no open demo trades to close.';return}
+ if(!rows.length){{note.textContent='There are no open demo trades to close.';return}}
  if(!confirm('Close ALL '+rows.length+' open demo trades at the latest available market prices?'))return;
  button.disabled=true;button.textContent='CLOSING…';note.textContent='Closing all open demo trades…';
- try{
-  const response=await fetch('/api/trades/close-all',{method:'POST'}),data=await response.json();
+ try{{
+  const response=await fetch('/api/trades/close-all',{{method:'POST'}}),data=await response.json();
   if(!response.ok)throw new Error(data.error||'Could not close all trades.');
   note.textContent='Closed '+data.closed+' demo trade(s). Combined demo P/L: KSh '+Number(data.pnl).toFixed(2)+'. Refreshing history…';
   window.location.reload();
- }catch(error){note.textContent=error.message||'Could not close all trades.';button.disabled=false;button.textContent='CLOSE ALL'}
-}
+ }}catch(error){{note.textContent=error.message||'Could not close all trades.';button.disabled=false;button.textContent='CLOSE ALL'}}
+}}
 </script><nav class="bottom-nav" aria-label="Main sections"><a href="/trades"><span>↔</span>Trades</a><a href="/signals"><span>◈</span>Insights</a><a href="/trade"><span>⌁</span>Buy/Sell</a><a href="/social-trading"><span>◎</span>Social Trading</a><a href="/deposit"><span>＋</span>Deposit</a></nav></body></html>"""
 
 
