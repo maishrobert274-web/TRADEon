@@ -12,12 +12,7 @@
 <header class="top"><div class="brand">TRADE<span>ON</span></div><div class="balance">DEMO KSh <span id="balance">{{ "%.2f"|format(demo_balance) }}</span></div></header>
 <div style="display:flex;gap:8px;padding:10px 14px;background:#151a21;border-bottom:1px solid #29313a"><input id="assetSearch" type="search" placeholder="Search markets…" oninput="filterMarkets(this.value)" style="flex:1;min-width:0;background:#0e1319;border:1px solid #35404d;border-radius:8px;padding:10px;color:#e8edf2"><a class="nav-tab" href="/signals">Chats</a><a class="nav-tab" href="/signals">Notifications</a></div>
 
-<nav class="shortcut-grid" aria-label="Main sections">
-<a class="shortcut" href="/trades"><span class="shortcut-icon">↔</span><span>Trades</span></a>
-<a class="shortcut" href="/signals"><span class="shortcut-icon">◈</span><span>Insights</span></a>
-<a class="shortcut" href="/signals"><span class="shortcut-icon">◎</span><span>Social Trading</span></a>
-<a class="shortcut" href="/deposit"><span class="shortcut-icon">＋</span><span>Deposit</span></a>
-</nav>
+
 <main class="wrap">
 <section>
 <div class="card">
@@ -39,6 +34,12 @@
 <div id="tradeStatus" class="status">Choose a market and amount. Your demo balance is separate from any real-money wallet balance.</div><div id="tradeCountdown" class="status" aria-live="polite"></div>
 </aside>
 </main>
+<nav class="shortcut-grid" aria-label="Main sections">
+<a class="shortcut" href="/trades"><span class="shortcut-icon">↔</span><span>Trades</span></a>
+<a class="shortcut" href="/signals"><span class="shortcut-icon">◈</span><span>Insights</span></a>
+<a class="shortcut" href="/signals"><span class="shortcut-icon">◎</span><span>Social Trading</span></a>
+<a class="shortcut" href="/deposit"><span class="shortcut-icon">＋</span><span>Deposit</span></a>
+</nav>
 <div class="disclaimer">TRADEON is currently in demo mode. Market feeds may be delayed or unavailable. Demo orders are simulated and do not represent actual exchange execution. Deposits and withdrawals are not proof of live brokerage capability.</div>
 <script>
 let currentSymbol='BTCUSDT', currentPair='BTC/USDT', countdownTimer=null;
