@@ -383,12 +383,12 @@ def signals():
     *{{box-sizing:border-box}}body{{font-family:Arial,sans-serif;margin:0;background:#0b0e11;color:#e8edf2}}
     header{{background:#151a21;border-bottom:1px solid #29313a;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0}}
     .brand{{font-size:20px;font-weight:900;letter-spacing:.4px}}.brand span{{color:#20c997}}header a{{color:#c5d0dc;text-decoration:none;font-size:13px}}
-    main{{padding:16px;max-width:1000px;margin:auto}}h1{{font-size:22px;margin:8px 0}}.intro{{color:#8c98a7;font-size:13px;margin-bottom:16px}}
+    main{{padding:16px 16px 100px;max-width:1000px;margin:auto}}h1{{font-size:22px;margin:8px 0}}.intro{{color:#8c98a7;font-size:13px;margin-bottom:16px}}
     .card{{background:#151a21;border:1px solid #29313a;padding:16px;border-radius:12px;margin:12px 0}}
     .signal-top{{display:flex;justify-content:space-between;align-items:center;gap:10px}}.signal-top h2{{font-size:17px;margin:0}}
     .buy,.sell{{font-size:13px;font-weight:900;padding:7px 10px;border-radius:7px}}.buy{{color:#a5f3c4;background:#183b31}}.sell{{color:#ffb4b4;background:#482426}}
     .details{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}}.detail{{background:#0e1319;border:1px solid #29313a;border-radius:8px;padding:10px;font-size:12px;color:#9aa5b1}}.detail b{{display:block;color:#e8edf2;margin-top:5px;overflow-wrap:anywhere}}
-    .note{{font-size:13px;line-height:1.5}}small{{color:#8c98a7}}.shortcut-grid{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:10px;max-width:1000px;margin:0 auto 14px}}
+    .note{{font-size:13px;line-height:1.5}}small{{color:#8c98a7}}.shortcut-grid{{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));background:#10151b;border-top:1px solid #29313a;max-width:none;margin:0 auto;box-shadow:0 -6px 20px #0005}}
     .shortcut{{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:54px;text-decoration:none;color:#dce5ed;background:#202833;border:1px solid #303b48;border-radius:9px;padding:8px 3px;font-size:11px;font-weight:800}}
     .shortcut-icon{{font-size:17px;color:#20c997}}@media(max-width:500px){{main{{padding:10px}}.card{{padding:12px}}.details{{gap:5px}}.detail{{padding:7px 5px;font-size:10px}}.signal-top h2{{font-size:15px}}header{{padding:12px 10px}}.brand{{font-size:18px}}}}
     </style></head><body><header><div class="brand">TRADE<span>ON</span></div><a href="/trade">← Back to trading</a></header>
@@ -409,7 +409,7 @@ def social_trading():
     *{box-sizing:border-box}body{margin:0;background:#0b0e11;color:#e8edf2;font-family:Arial,sans-serif}
     header{background:#151a21;border-bottom:1px solid #29313a;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0}
     .brand{font-size:20px;font-weight:900}.brand span{color:#20c997}a{color:#c5d0dc;text-decoration:none;font-size:13px}
-    main{max-width:900px;margin:auto;padding:16px}.muted{color:#8c98a7;font-size:13px;line-height:1.5}
+    main{max-width:900px;margin:auto;padding:16px 16px 100px}.muted{color:#8c98a7;font-size:13px;line-height:1.5}
     .card{background:#151a21;border:1px solid #29313a;border-radius:12px;padding:16px;margin:12px 0}
     .card h2{font-size:17px;margin:0 0 8px}.pill{display:inline-block;background:#183b31;color:#a5f3c4;border-radius:6px;padding:6px 9px;font-size:11px;font-weight:bold}
     .shortcut-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:10px;max-width:900px;margin:0 auto 14px}
