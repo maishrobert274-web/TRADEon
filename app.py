@@ -36,7 +36,17 @@ def normalize_phone(phone):
 def home():
     if "user_id" not in session:
         return redirect(url_for("login"))
-    return render_template("index.html", user_name=session.get("user_name"))
+    with sqlite3.connect(DB) as con:
+        con.execute("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)", (session["user_id"],))
+        wallet_balance = con.execute(
+            "SELECT balance FROM wallets WHERE user_id=?",
+            (session["user_id"],)
+        ).fetchone()[0]
+    return render_template(
+        "index.html",
+        user_name=session.get("user_name"),
+        wallet_balance=wallet_balance
+    )
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
