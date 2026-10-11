@@ -34,8 +34,9 @@ def normalize_phone(phone):
 
 @app.route("/")
 def home():
+    # Public visitors can learn about TRADEON and create an account without logging in.
     if "user_id" not in session:
-        return redirect(url_for("login"))
+        return render_template("public_home.html")
     with sqlite3.connect(DB) as con:
         con.execute("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)", (session["user_id"],))
         wallet_balance = con.execute(
@@ -221,8 +222,7 @@ def api_trade():
     return {"ok": True, "trade_id": trade_id, "pair": pair, "side": side, "amount": amount, "entry_price": price, "status": "OPEN"}
 @app.route("/api/market")
 def market_price():
-    if "user_id" not in session:
-        return {"error": "login required"}, 401
+    # Read-only public market data is available before registration.
     symbol = request.args.get("symbol", "BTCUSDT").upper()
     allowed = {"BTCUSDT", "ETHUSDT", "SOLUSDT"}
     if symbol not in allowed:
@@ -261,8 +261,7 @@ def market_price():
 
 @app.route("/signals")
 def signals():
-    if "user_id" not in session:
-        return redirect(url_for("login"))
+    # Published signals are public; manager drafts remain hidden by active=1.
     with sqlite3.connect(DB) as con:
         rows = con.execute("""
             SELECT id,pair,action,entry_price,stop_loss,take_profit,strength,note,created_at
