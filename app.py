@@ -385,7 +385,7 @@ def market_history():
     symbol = request.args.get("symbol", "BTCUSDT").upper()
     interval = request.args.get("interval", "1h").lower()
     products = {"BTCUSDT": "BTC-USD", "ETHUSDT": "ETH-USD", "SOLUSDT": "SOL-USD"}
-    allowed_intervals = {"1m", "5m", "15m", "1h", "4h", "1d"}
+    allowed_intervals = {"1s", "1m", "5m", "15m", "1h", "4h", "1d"}
     coinbase_granularities = {"1m": 60, "5m": 300, "15m": 900, "1h": 3600, "1d": 86400}
     if symbol not in products:
         return {"error": "unsupported symbol"}, 400
@@ -416,6 +416,8 @@ def market_history():
             return result
     except (requests.RequestException, KeyError, TypeError, ValueError):
         pass
+    if interval == "1s":
+        return {"error": "1-second candles require the live Binance feed", "points": []}, 503
     try:
         granularity = 3600 if interval == "4h" else coinbase_granularities.get(interval)
         response = requests.get(
