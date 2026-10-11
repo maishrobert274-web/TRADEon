@@ -24,6 +24,10 @@ def init_db():
         con.execute("""CREATE TABLE IF NOT EXISTS wallets (user_id INTEGER PRIMARY KEY, balance REAL NOT NULL DEFAULT 0)""")
         con.execute("""CREATE TABLE IF NOT EXISTS demo_wallets (user_id INTEGER PRIMARY KEY, balance REAL NOT NULL DEFAULT 10000)""")
         con.execute("""CREATE TABLE IF NOT EXISTS trades (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, pair TEXT NOT NULL, side TEXT NOT NULL, amount REAL NOT NULL, entry_price REAL NOT NULL, status TEXT NOT NULL DEFAULT "OPEN", pnl REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, closed_at TEXT)""")
+        trade_cols = [r[1] for r in con.execute("PRAGMA table_info(trades)").fetchall()]
+        for column, definition in [("mode", "TEXT NOT NULL DEFAULT 'SPOT'"), ("duration_seconds", "INTEGER"), ("expires_at", "TEXT"), ("settlement_price", "REAL")]:
+            if column not in trade_cols:
+                con.execute(f"ALTER TABLE trades ADD COLUMN {column} {definition}")
         con.execute("""CREATE TABLE IF NOT EXISTS signals (id INTEGER PRIMARY KEY AUTOINCREMENT, pair TEXT NOT NULL, action TEXT NOT NULL, entry_price TEXT, stop_loss TEXT, take_profit TEXT, strength TEXT NOT NULL, note TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, active INTEGER NOT NULL DEFAULT 1)""")
 init_db()
 
@@ -208,28 +212,60 @@ def api_trade():
     data = request.get_json(silent=True) or {}
     pair = str(data.get("pair", "")).upper()
     side = str(data.get("side", "")).upper()
+    mode = str(data.get("mode", "SPOT")).upper()
     try:
         amount = float(data.get("amount", 0))
+        duration = int(data.get("duration_seconds", 0))
     except (TypeError, ValueError):
-        amount = 0
+        amount, duration = 0, 0
     symbols = {"BTC/USDT": "BTCUSDT", "ETH/USDT": "ETHUSDT", "SOL/USDT": "SOLUSDT"}
-    if pair not in symbols or side not in ("BUY", "SELL") or amount < 10:
-        return {"error": "Invalid trade details. Minimum is KSh 10."}, 400
+    allowed_sides = ("UP", "DOWN") if mode == "DURATION" else ("BUY", "SELL")
+    if pair not in symbols or side not in allowed_sides or amount < 10 or mode not in ("SPOT", "DURATION"):
+        return {"error": "Invalid demo trade details. Minimum is KSh 10."}, 400
+    if mode == "DURATION" and duration not in (30, 60, 300, 900):
+        return {"error": "Choose a supported demo duration."}, 400
     try:
-        response = requests.get("https://api.binance.com/api/v3/ticker/price", params={"symbol": symbols[pair]}, timeout=10)
+        response = requests.get("https://data-api.binance.vision/api/v3/ticker/price", params={"symbol": symbols[pair]}, timeout=(1.5, 3))
         response.raise_for_status()
         price = float(response.json()["price"])
     except (requests.RequestException, KeyError, ValueError):
         return {"error": "Could not get the current market price."}, 503
+    db_side = ("BUY" if side == "UP" else "SELL") if mode == "DURATION" else side
     with sqlite3.connect(DB) as con:
         con.execute("INSERT OR IGNORE INTO demo_wallets (user_id,balance) VALUES (?,10000)", (session["user_id"],))
         balance = con.execute("SELECT balance FROM demo_wallets WHERE user_id=?", (session["user_id"],)).fetchone()[0]
         if amount > balance:
             return {"error": "Insufficient demo balance. Available: KSh %.2f" % balance}, 400
         con.execute("UPDATE demo_wallets SET balance=balance-? WHERE user_id=?", (amount, session["user_id"]))
-        cur = con.execute("INSERT INTO trades (user_id,pair,side,amount,entry_price,status) VALUES (?,?,?,?,?,'OPEN')", (session["user_id"], pair, side, amount, price))
+        cur = con.execute("INSERT INTO trades (user_id,pair,side,amount,entry_price,status,mode,duration_seconds,expires_at) VALUES (?,?,?,?,?,'OPEN',?,?,CASE WHEN ? > 0 THEN datetime('now', '+' || ? || ' seconds') ELSE NULL END)", (session["user_id"], pair, db_side, amount, price, mode, duration if mode == "DURATION" else None, duration if mode == "DURATION" else 0, duration if mode == "DURATION" else 0))
         trade_id = cur.lastrowid
-    return {"ok": True, "trade_id": trade_id, "pair": pair, "side": side, "amount": amount, "entry_price": price, "status": "OPEN"}
+    return {"ok": True, "trade_id": trade_id, "pair": pair, "side": side, "mode": mode, "duration_seconds": duration if mode == "DURATION" else None, "entry_price": price, "status": "OPEN"}
+
+@app.route("/api/trades/settle-due", methods=["POST"])
+def settle_due_demo_trades():
+    if "user_id" not in session:
+        return {"error": "login required"}, 401
+    symbols = {"BTC/USDT": "BTCUSDT", "ETH/USDT": "ETHUSDT", "SOL/USDT": "SOLUSDT"}
+    with sqlite3.connect(DB) as con:
+        due = con.execute("SELECT id,pair,side,amount,entry_price FROM trades WHERE user_id=? AND mode='DURATION' AND status='OPEN' AND expires_at<=CURRENT_TIMESTAMP", (session["user_id"],)).fetchall()
+        results = []
+        for row in due:
+            if row[1] not in symbols:
+                continue
+            try:
+                response = requests.get("https://data-api.binance.vision/api/v3/ticker/price", params={"symbol": symbols[row[1]]}, timeout=(1.5, 3))
+                response.raise_for_status()
+                exit_price = float(response.json()["price"])
+            except (requests.RequestException, KeyError, ValueError):
+                continue
+            entry_price, amount = float(row[4]), float(row[3])
+            won = (row[2] == "BUY" and exit_price > entry_price) or (row[2] == "SELL" and exit_price < entry_price)
+            pnl = round(amount * 0.8, 2) if won else -round(amount, 2)
+            con.execute("UPDATE trades SET status='CLOSED',pnl=?,closed_at=CURRENT_TIMESTAMP,settlement_price=? WHERE id=? AND user_id=? AND status='OPEN'", (pnl, exit_price, row[0], session["user_id"]))
+            con.execute("UPDATE demo_wallets SET balance=balance+? WHERE user_id=?", (amount + pnl if won else 0, session["user_id"]))
+            results.append({"trade_id": row[0], "won": won, "pnl": pnl, "exit_price": exit_price})
+    return {"ok": True, "settled": results}
+
 @app.route("/trades/<int:trade_id>/close", methods=["POST"])
 def close_demo_trade(trade_id):
     if "user_id" not in session:
