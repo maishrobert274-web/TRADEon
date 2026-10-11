@@ -518,17 +518,32 @@ def trades():
         return redirect(url_for("login"))
     with sqlite3.connect(DB) as con:
         rows = con.execute(
-            "SELECT pair,side,amount,entry_price,status,created_at FROM trades WHERE user_id=? ORDER BY id DESC LIMIT 100",
+            "SELECT id,pair,side,amount,entry_price,status,pnl,created_at FROM trades WHERE user_id=? ORDER BY id DESC LIMIT 100",
             (session["user_id"],)
         ).fetchall()
-    table_rows = "".join(
-        f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>KSh {r[2]:,.2f}</td><td>{r[3]:,.8f}</td><td>{r[4]}</td><td>{r[5]}</td></tr>"
-        for r in rows
-    )
-    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Trades</title>
-    <style>body{{font-family:Arial;margin:0;background:#f4f6f8;color:#182230}}header{{background:#101828;color:#fff;padding:18px}}main{{max-width:900px;margin:auto;padding:18px}}.wrap{{overflow:auto}}table{{width:100%;min-width:650px;border-collapse:collapse;background:#fff}}th,td{{padding:12px;text-align:left;border-bottom:1px solid #eee;font-size:13px}}a{{color:#12b76a}}</style></head>
-    <body><header><b>TRADEON — MY TRADES</b></header><main><p><a href="/">← Back to dashboard</a></p><h2>My trades</h2>
-    <p>These are simulated test trades, not orders sent to a cryptocurrency exchange.</p><div class="wrap"><table><tr><th>Pair</th><th>Side</th><th>Amount</th><th>Entry price</th><th>Status</th><th>Date</th></tr>{table_rows or "<tr><td colspan='6'>No trades yet.</td></tr>"}</table></div></main></body></html>"""
+    rendered_rows = []
+    for r in rows:
+        action = (
+            f'<form method="post" action="/trades/{r[0]}/close"><button type="submit">Close demo trade</button></form>'
+            if r[5] == "OPEN" else "Closed"
+        )
+        pnl = float(r[6] or 0)
+        pnl_color = "#12b76a" if pnl >= 0 else "#d92d20"
+        rendered_rows.append(
+            f"<tr><td>{r[1]}</td><td>{r[2]}</td><td>KSh {r[3]:,.2f}</td>"
+            f"<td>{r[4]:,.8f}</td><td>{r[5]}</td>"
+            f"<td style='color:{pnl_color}'>KSh {pnl:,.2f}</td><td>{r[7]}</td><td>{action}</td></tr>"
+        )
+    table_rows = "".join(rendered_rows)
+    notice = ""
+    if request.args.get("closed") == "1":
+        notice = "<p class='notice'>Demo trade closed and simulated P/L recorded.</p>"
+    elif request.args.get("close") == "price_unavailable":
+        notice = "<p class='notice error'>Market price unavailable. Your demo trade remains open; please try again.</p>"
+    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>TRADEON Trades</title>
+    <style>body{{font-family:Arial;margin:0;background:#f4f6f8;color:#182230}}header{{background:#101828;color:#fff;padding:18px}}main{{max-width:1100px;margin:auto;padding:18px}}.wrap{{overflow:auto}}table{{width:100%;min-width:900px;border-collapse:collapse;background:#fff}}th,td{{padding:12px;text-align:left;border-bottom:1px solid #eee;font-size:13px}}a{{color:#12b76a}}button{{background:#12b76a;color:white;border:0;padding:9px 11px;border-radius:7px;font-weight:700}}.notice{{padding:12px;background:#ecfdf3;border-radius:8px;color:#027a48}}.error{{background:#fee4e2;color:#b42318}}</style></head>
+    <body><header><b>TRADEON GLOBAL — MY DEMO TRADES</b></header><main><p><a href="/trade">← Back to trading</a> · <a href="/">Dashboard</a></p><h2>My demo trades</h2>
+    <p>Orders shown here are simulated and are not sent to a cryptocurrency exchange. P/L is illustrative and does not represent real money.</p>{notice}<div class="wrap"><table><tr><th>Pair</th><th>Side</th><th>Amount</th><th>Entry price</th><th>Status</th><th>Demo P/L</th><th>Date</th><th>Action</th></tr>{table_rows or "<tr><td colspan='8'>No trades yet.</td></tr>"}</table></div></main></body></html>"""
 
 
 @app.route("/transactions")
