@@ -412,7 +412,7 @@ def social_trading():
     main{max-width:900px;margin:auto;padding:16px 16px 100px}.muted{color:#8c98a7;font-size:13px;line-height:1.5}
     .card{background:#151a21;border:1px solid #29313a;border-radius:12px;padding:16px;margin:12px 0}
     .card h2{font-size:17px;margin:0 0 8px}.pill{display:inline-block;background:#183b31;color:#a5f3c4;border-radius:6px;padding:6px 9px;font-size:11px;font-weight:bold}
-    .shortcut-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:10px;max-width:900px;margin:0 auto 14px}
+    .shortcut-grid{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));background:#10151b;border-top:1px solid #29313a;max-width:none;margin:0;box-shadow:0 -6px 20px #0005}
     .shortcut{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:54px;text-decoration:none;color:#dce5ed;background:#202833;border:1px solid #303b48;border-radius:9px;padding:8px 3px;font-size:11px;font-weight:800}
     .shortcut-icon{font-size:17px;color:#20c997}@media(max-width:500px){header{padding:12px 10px}.brand{font-size:18px}main{padding:10px}.card{padding:13px}}
     </style></head><body><header><div class="brand">TRADE<span>ON</span></div><a href="/trade">← Back to trading</a></header>
