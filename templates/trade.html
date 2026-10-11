@@ -18,7 +18,7 @@
 <div class="card">
 <div class="marketbar" id="marketList"><button class="pair active" data-pair="BTC/USDT" data-symbol="BTCUSDT" onclick="choosePair(this)">BTC/USDT</button><button class="pair" data-pair="ETH/USDT" data-symbol="ETHUSDT" onclick="choosePair(this)">ETH/USDT</button><button class="pair" data-pair="SOL/USDT" data-symbol="SOLUSDT" onclick="choosePair(this)">SOL/USDT</button></div>
 <div class="pricehead"><div><div class="symbol" id="symbol">BTC/USDT</div><div class="price" id="price">Loading price…</div></div><div style="text-align:right"><div class="change" id="change">--</div><div class="muted" id="source">Getting market data</div></div></div>
-<div class="chart"><div id="tvChart" role="img" aria-label="TradingView candlestick market chart" style="width:100%;height:100%;min-height:260px"></div></div>
+<div class="chart"><div id="tvChart" role="img" aria-label="TradingView candlestick market chart" style="width:100%;height:100%;min-height:0"></div></div>
 <div class="chartfoot"><span id="chartStatus">Loading market candles…</span><span id="candleCountdown">Candle closes in --:--</span><span id="feedNote">Market feed</span></div>
 <div class="chart-controls"><div class="chart-types"><button class="selected" data-chart="candles" onclick="setChartType('candles',this)">Candles</button><button data-chart="line" onclick="setChartType('line',this)">Line</button><button data-chart="area" onclick="setChartType('area',this)">Area</button><button data-chart="bars" onclick="setChartType('bars',this)">Bars</button></div><div class="timeframes"><button data-interval="1m" onclick="setIntervalChoice('1m',this)">1m</button><button data-interval="5m" onclick="setIntervalChoice('5m',this)">5m</button><button data-interval="15m" onclick="setIntervalChoice('15m',this)">15m</button><button class="selected" data-interval="1h" onclick="setIntervalChoice('1h',this)">1H</button><button data-interval="4h" onclick="setIntervalChoice('4h',this)">4H</button><button data-interval="1d" onclick="setIntervalChoice('1d',this)">1D</button></div></div>
 </div>
@@ -58,14 +58,14 @@ function showCountdown(seconds,tradeId){if(countdownTimer)clearInterval(countdow
 async function settleDue(){try{const r=await fetch('/api/trades/settle-due',{method:'POST'});if(r.ok){const d=await r.json();if(d.settled&&d.settled.length){document.getElementById('tradeStatus').textContent=d.settled.map(t=>'Trade #'+t.trade_id+': '+(t.won?'WIN':'LOSS')+' · demo P/L KSh '+Number(t.pnl).toFixed(2)).join(' | ');location.reload()}}}catch(e){}}
 function choosePair(button){currentSymbol=button.dataset.symbol;currentPair=button.dataset.pair;document.getElementById('symbol').textContent=currentPair;document.querySelectorAll('.pair').forEach(b=>b.classList.toggle('active',b===button));loadPrice();loadChart();connectLiveKline()}
 async function loadPrice(){const p=document.getElementById('price'),ch=document.getElementById('change'),src=document.getElementById('source');try{const r=await fetch('/api/market?symbol='+encodeURIComponent(currentSymbol));const d=await r.json();if(!r.ok)throw Error(d.error||'unavailable');lastLivePrice=Number(d.price)||lastLivePrice;p.textContent=fmt(d.price);ch.textContent=(d.change_percent>=0?'+':'')+Number(d.change_percent).toFixed(2)+'%';ch.style.color=d.change_percent>=0?'#27d99a':'#ff6b6b';src.textContent='Source: '+(d.source||'market data')}catch(e){p.textContent='Price unavailable';ch.textContent='--';src.textContent='Market feed temporarily unavailable'}}
-let chartType='candles', chartInterval='1h', tvChart=null, tvSeries=null, tvResizeObserver=null, chartBusy=false;
+let chartType='candles', chartInterval='1h', tvChart=null, tvSeries=null, tvResizeObserver=null, chartBusy=false, liveCandle=null;
 document.querySelectorAll('.chart-types button').forEach(b=>b.classList.toggle('selected',b.dataset.chart==='candles'));
 function initTvChart(){
  const host=document.getElementById('tvChart');
  if(!host||!window.LightweightCharts){document.getElementById('chartStatus').textContent='Chart library could not load. Check internet and refresh.';return false}
  if(tvChart)return true;
  const L=window.LightweightCharts;
- tvChart=L.createChart(host,{width:Math.max(280,host.clientWidth),height:Math.max(260,host.clientHeight),layout:{background:{type:'solid',color:'#151a21'},textColor:'#c9d1d9'},grid:{vertLines:{color:'#222a33'},horzLines:{color:'#222a33'}},rightPriceScale:{borderColor:'#303b48'},timeScale:{borderColor:'#303b48',timeVisible:true,secondsVisible:false},crosshair:{mode:L.CrosshairMode.Normal},handleScroll:true,handleScale:true});
+ tvChart=L.createChart(host,{width:Math.max(280,host.clientWidth),height:Math.max(120,host.clientHeight),layout:{background:{type:'solid',color:'#151a21'},textColor:'#c9d1d9'},grid:{vertLines:{color:'#222a33'},horzLines:{color:'#222a33'}},rightPriceScale:{borderColor:'#303b48'},timeScale:{borderColor:'#303b48',timeVisible:true,secondsVisible:false},crosshair:{mode:L.CrosshairMode.Normal},handleScroll:true,handleScale:true});
  setSeriesType('candles');
  if(window.ResizeObserver){tvResizeObserver=new ResizeObserver(()=>{if(tvChart)tvChart.applyOptions({width:Math.max(280,host.clientWidth),height:Math.max(260,host.clientHeight)})});tvResizeObserver.observe(host)}
  return true;
@@ -85,9 +85,17 @@ function setIntervalChoice(interval,button){chartInterval=interval;document.quer
 async function fetchChartWithTimeout(url,ms=5000){const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),ms);try{return await fetch(url,{cache:'no-store',signal:controller.signal})}finally{clearTimeout(timer)}}
 
 function updateCandleClock(){const el=document.getElementById('candleCountdown');if(!el)return;if(!candleCloseAt){el.textContent='Candle closes in --:--';return}const seconds=Math.max(0,Math.ceil((candleCloseAt-Date.now())/1000));const mins=Math.floor(seconds/60),secs=seconds%60;el.textContent='Candle closes in '+String(mins).padStart(2,'0')+':'+String(secs).padStart(2,'0')}
+function intervalSeconds(){return ({'1m':60,'5m':300,'15m':900,'1h':3600,'4h':14400,'1d':86400})[chartInterval]||3600}
+function updateLiveCandle(price,eventMs){
+ if(!tvSeries||!(price>0))return;
+ const step=intervalSeconds(),bucket=Math.floor(eventMs/1000/step)*step;
+ if(!liveCandle||liveCandle.time!==bucket){liveCandle={time:bucket,open:price,high:price,low:price,close:price};}
+ else{liveCandle={time:bucket,open:liveCandle.open,high:Math.max(liveCandle.high,price),low:Math.min(liveCandle.low,price),close:price};}
+ try{if(chartType==='line'||chartType==='area')tvSeries.update({time:bucket,value:price});else tvSeries.update(liveCandle)}catch(e){}
+}
 function connectLiveKline(){
  if(liveTradeSocket){try{liveTradeSocket.onclose=null;liveTradeSocket.close()}catch(e){}liveTradeSocket=null}
- try{const ts=new WebSocket('wss://stream.binance.com:9443/ws/'+currentSymbol.toLowerCase()+'@trade');liveTradeSocket=ts;ts.onmessage=(ev)=>{if(liveTradeSocket!==ts)return;try{const d=JSON.parse(ev.data),price=Number(d.p);if(price>0){lastLivePrice=price;document.getElementById('price').textContent=fmt(price);document.getElementById('source').textContent='Live trade price';}}catch(e){}};ts.onerror=()=>{};}catch(e){}
+ try{const ts=new WebSocket('wss://stream.binance.com:9443/ws/'+currentSymbol.toLowerCase()+'@trade');liveTradeSocket=ts;ts.onmessage=(ev)=>{if(liveTradeSocket!==ts)return;try{const d=JSON.parse(ev.data),price=Number(d.p),eventMs=Number(d.T)||Date.now();if(price>0){lastLivePrice=price;document.getElementById('price').textContent=fmt(price);document.getElementById('source').textContent='Live trade price';updateLiveCandle(price,eventMs);}}catch(e){}};ts.onerror=()=>{};}catch(e){}};ts.onerror=()=>{};}catch(e){}
  if(liveKlineSocket){try{liveKlineSocket.onclose=null;liveKlineSocket.close()}catch(e){}liveKlineSocket=null}
  candleCloseAt=0;updateCandleClock();
  if(!('WebSocket' in window)){document.getElementById('feedNote').textContent='Live stream unavailable';return}
@@ -101,7 +109,7 @@ function connectLiveKline(){
     const msg=JSON.parse(event.data),k=msg.k;if(!k||!tvSeries)return;
     const candle={time:Math.floor(Number(k.t)/1000),open:Number(k.o),high:Number(k.h),low:Number(k.l),close:Number(k.c)};
     if(!Object.values(candle).every(Number.isFinite))return;
-    if(chartType==='line'||chartType==='area')tvSeries.update({time:candle.time,value:candle.close});else tvSeries.update(candle);
+    liveCandle=candle;if(chartType==='line'||chartType==='area')tvSeries.update({time:candle.time,value:candle.close});else tvSeries.update(candle);
     candleCloseAt=Number(k.T);updateCandleClock();
     lastLivePrice=candle.close;const p=document.getElementById('price');if(p)p.textContent=fmt(candle.close);
     const s=document.getElementById('source');if(s)s.textContent='Live Binance price';
@@ -139,6 +147,7 @@ async function loadChart(){
   if(!tvSeries)setSeriesType(chartType);
   const seriesData=(chartType==='line'||chartType==='area')?unique.map(p=>({time:p.time,value:p.close})):unique;
   tvSeries.setData(seriesData);
+  liveCandle=unique.length?{...unique[unique.length-1]}:null;
   const viewKey=currentSymbol+':'+chartInterval;
   if(lastChartViewKey!==viewKey){tvChart.timeScale().fitContent();lastChartViewKey=viewKey}
   status.textContent=source+' · '+unique.length+' '+chartInterval+' candles · refreshes every 5s';
@@ -198,6 +207,6 @@ async function placeTrade(side){
  }catch(e){status.textContent=e.message||'Could not record demo order.'}
  finally{orderPending=false;buttons.forEach(b=>{b.disabled=false;b.style.opacity='1'})}
 }
-loadPrice();setTimeout(loadChart,250);setTimeout(connectLiveKline,500);loadOpenPositions();if(!candleClockTimer)candleClockTimer=setInterval(updateCandleClock,250);setInterval(settleDue,2000);setInterval(loadPrice,2000);setInterval(loadChart,5000);setInterval(loadOpenPositions,10000);window.addEventListener('resize',()=>{if(tvChart){const host=document.getElementById('tvChart');tvChart.applyOptions({width:Math.max(280,host.clientWidth),height:Math.max(260,host.clientHeight)})}});
+loadPrice();setTimeout(loadChart,250);setTimeout(connectLiveKline,500);loadOpenPositions();if(!candleClockTimer)candleClockTimer=setInterval(updateCandleClock,250);setInterval(settleDue,2000);setInterval(loadPrice,2000);setInterval(loadChart,30000);setInterval(loadOpenPositions,10000);window.addEventListener('resize',()=>{if(tvChart){const host=document.getElementById('tvChart');tvChart.applyOptions({width:Math.max(280,host.clientWidth),height:Math.max(260,host.clientHeight)})}});
 </script>
 </body></html>
