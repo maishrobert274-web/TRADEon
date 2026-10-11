@@ -306,7 +306,7 @@ def manager_signals():
     </style></head><body><header><b>TRADEON MANAGER — SIGNALS</b> &nbsp; <a href="/manager">Dashboard</a></header>
     <main><h2>Create Signal</h2><div class="card">{("<p class='error'>"+error+"</p>") if error else ""}
     <form method="post">
-      <div class="grid"><input name="pair" placeholder="Pair e.g. BTC/USDT" required>
+      <div class="grid"><select name="pair" required><option value="BTC/USD">BTC/USD</option><option value="BTC/USDT">BTC/USDT</option><option value="ETH/USD">ETH/USD</option><option value="ETH/USDT">ETH/USDT</option><option value="SOL/USDT">SOL/USDT</option><option value="BNB/USDT">BNB/USDT</option><option value="XRP/USDT">XRP/USDT</option></select>
       <select name="action"><option value="BUY">BUY</option><option value="SELL">SELL</option></select></div>
       <div class="grid"><input name="entry_price" placeholder="Entry price"><input name="stop_loss" placeholder="Stop loss"></div>
       <div class="grid"><input name="take_profit" placeholder="Take profit">
