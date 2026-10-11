@@ -280,7 +280,7 @@ def close_demo_trade(trade_id):
     return redirect(url_for("trades") + "?closed=1")
 
 MARKET_CACHE = {}
-MARKET_CACHE_SECONDS = 15
+MARKET_CACHE_SECONDS = 30
 
 @app.route("/api/market/history")
 def market_history():
@@ -326,7 +326,7 @@ def market_price():
         response = requests.get(
             "https://data-api.binance.vision/api/v3/ticker/24hr",
             params={"symbol": symbol},
-            timeout=(1.5, 2.5)
+            timeout=(0.8, 1.5)
         )
         response.raise_for_status()
         data = response.json()
