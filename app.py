@@ -223,6 +223,29 @@ def api_trade():
 MARKET_CACHE = {}
 MARKET_CACHE_SECONDS = 15
 
+@app.route("/api/market/history")
+def market_history():
+    symbol = request.args.get("symbol", "BTCUSDT").upper()
+    products = {"BTCUSDT": "BTC-USD", "ETHUSDT": "ETH-USD", "SOLUSDT": "SOL-USD"}
+    if symbol not in products:
+        return {"error": "unsupported symbol"}, 400
+    try:
+        response = requests.get(
+            f"https://api.exchange.coinbase.com/products/{products[symbol]}/candles",
+            params={"granularity": 3600},
+            headers={"User-Agent": "TRADEON-price-chart"},
+            timeout=(1.5, 3)
+        )
+        response.raise_for_status()
+        candles = sorted(response.json(), key=lambda candle: candle[0])
+        # Coinbase candle rows: [time, low, high, open, close, volume]
+        points = [{"time": candle[0], "price": float(candle[4])} for candle in candles[-24:]]
+        if len(points) < 2:
+            return {"error": "Not enough chart data yet."}, 503
+        return {"symbol": symbol, "interval": "1h", "points": points, "source": "Coinbase"}
+    except (requests.RequestException, KeyError, TypeError, ValueError):
+        return {"error": "Price chart data is temporarily unavailable."}, 503
+
 @app.route("/api/market")
 def market_price():
     # Public market data is cached briefly to reduce repeated network calls.
