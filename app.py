@@ -998,7 +998,7 @@ def manager_wallets():
     input,select,button{padding:8px;margin:3px;max-width:150px}button{background:#111;color:white}
     .msg{background:#e6f4ea;padding:10px}</style></head><body><header><b>TRADEON MANAGER — WALLETS & ACCESS</b>
     &nbsp; <a style="color:white" href="/manager">Dashboard</a></header><main><h2>User balances and account access</h2>
-    <p class="msg">""" + message + """</p><form method="get"><input name="q" value="""" + q + """" placeholder="Search name or phone"><button>Search</button></form>
+    <p class="msg">""" + message + """</p><form method="get"><input name="q" value='""" + q + """' placeholder="Search name or phone"><button>Search</button></form>
     <div class="wrap"><table><tr><th>ID</th><th>Name</th><th>Phone</th><th>Real balance</th><th>Status</th><th>Block reason</th><th>Manager action</th></tr>""" +
     (user_rows or "<tr><td colspan='7'>No users found.</td></tr>") + """</table></div>
     <h2>Recent manual balance transactions</h2><div class="wrap"><table><tr><th>ID</th><th>User</th><th>Type</th><th>Amount</th><th>Balance after</th><th>Reason</th><th>Manager</th><th>Date</th></tr>""" +
