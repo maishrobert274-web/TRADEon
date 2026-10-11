@@ -20,6 +20,7 @@ def init_db():
             con.execute("ALTER TABLE users ADD COLUMN verified INTEGER NOT NULL DEFAULT 0")
         con.execute("""CREATE TABLE IF NOT EXISTS deposits (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, amount REAL NOT NULL, phone TEXT NOT NULL, merchant_request_id TEXT, checkout_request_id TEXT UNIQUE, mpesa_receipt TEXT, status TEXT NOT NULL DEFAULT "PENDING", created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
         con.execute("""CREATE TABLE IF NOT EXISTS wallets (user_id INTEGER PRIMARY KEY, balance REAL NOT NULL DEFAULT 0)""")
+        con.execute("""CREATE TABLE IF NOT EXISTS demo_wallets (user_id INTEGER PRIMARY KEY, balance REAL NOT NULL DEFAULT 10000)""")
         con.execute("""CREATE TABLE IF NOT EXISTS trades (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, pair TEXT NOT NULL, side TEXT NOT NULL, amount REAL NOT NULL, entry_price REAL NOT NULL, status TEXT NOT NULL DEFAULT "OPEN", pnl REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, closed_at TEXT)""")
         con.execute("""CREATE TABLE IF NOT EXISTS signals (id INTEGER PRIMARY KEY AUTOINCREMENT, pair TEXT NOT NULL, action TEXT NOT NULL, entry_price TEXT, stop_loss TEXT, take_profit TEXT, strength TEXT NOT NULL, note TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, active INTEGER NOT NULL DEFAULT 1)""")
 init_db()
@@ -39,8 +40,9 @@ def home():
         return render_template("public_home.html")
     with sqlite3.connect(DB) as con:
         con.execute("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)", (session["user_id"],))
+        con.execute("INSERT OR IGNORE INTO demo_wallets (user_id,balance) VALUES (?,10000)", (session["user_id"],))
         wallet_balance = con.execute(
-            "SELECT balance FROM wallets WHERE user_id=?",
+            "SELECT balance FROM demo_wallets WHERE user_id=?",
             (session["user_id"],)
         ).fetchone()[0]
     return render_template(
@@ -212,11 +214,11 @@ def api_trade():
     except (requests.RequestException, KeyError, ValueError):
         return {"error": "Could not get the current market price."}, 503
     with sqlite3.connect(DB) as con:
-        con.execute("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)", (session["user_id"],))
-        balance = con.execute("SELECT balance FROM wallets WHERE user_id=?", (session["user_id"],)).fetchone()[0]
+        con.execute("INSERT OR IGNORE INTO demo_wallets (user_id,balance) VALUES (?,10000)", (session["user_id"],))
+        balance = con.execute("SELECT balance FROM demo_wallets WHERE user_id=?", (session["user_id"],)).fetchone()[0]
         if amount > balance:
-            return {"error": "Insufficient wallet balance. Available: KSh %.2f" % balance}, 400
-        con.execute("UPDATE wallets SET balance=balance-? WHERE user_id=?", (amount, session["user_id"]))
+            return {"error": "Insufficient demo balance. Available: KSh %.2f" % balance}, 400
+        con.execute("UPDATE demo_wallets SET balance=balance-? WHERE user_id=?", (amount, session["user_id"]))
         cur = con.execute("INSERT INTO trades (user_id,pair,side,amount,entry_price,status) VALUES (?,?,?,?,?,'OPEN')", (session["user_id"], pair, side, amount, price))
         trade_id = cur.lastrowid
     return {"ok": True, "trade_id": trade_id, "pair": pair, "side": side, "amount": amount, "entry_price": price, "status": "OPEN"}
