@@ -56,12 +56,6 @@
 <section class="below-actions"><div class="trade-amount"><label class="label" for="amount">Amount (KSh)</label><input id="amount" class="amount" type="number" min="10" max="10000" step="10" value="100"><div class="presets"><button type="button" onclick="setAmount(100)">100</button><button type="button" onclick="setAmount(500)">500</button><button type="button" onclick="setAmount(1000)">1,000</button></div><label class="label" for="orderType">Mode</label><select id="orderType" class="duration" onchange="updateTradeMode()"><option value="spot">Spot</option><option value="duration">Fixed time</option></select><div id="durationBox" hidden><label class="label" for="tradeDuration">Expiry</label><select id="tradeDuration" class="duration"><option value="15">15 seconds</option><option value="30">30 seconds</option><option value="60">1 minute</option></select></div></div><div class="actions"><button class="buy" id="upButton" onclick="placeTrade(document.getElementById('orderType').value==='duration'?'UP':'BUY')">BUY / UP</button><button class="sell" id="downButton" onclick="placeTrade(document.getElementById('orderType').value==='duration'?'DOWN':'SELL')">SELL / DOWN</button></div><div id="tradeStatus" class="status">Demo trading only. No real order is placed.</div><div id="tradeCountdown" class="status" aria-live="polite"></div></section>
 
 
-<section class="open-positions">
- <div class="positions-heading"><strong>Open demo trades</strong></div>
- <div id="openPositionsList" class="positions-list"><div class="position-empty">Loading open trades…</div></div>
- <div id="closeTradeNotice" class="position-empty" aria-live="polite"></div>
-</section>
-
 <nav class="shortcut-grid" aria-label="Main sections">
 <a class="shortcut" href="/trades"><span class="shortcut-icon">↔</span><span>Trades</span></a>
 <a class="shortcut" href="/signals"><span class="shortcut-icon">◈</span><span>Insights</span></a>
