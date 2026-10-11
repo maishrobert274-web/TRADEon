@@ -212,7 +212,7 @@ def api_trade():
     allowed_sides = ("UP", "DOWN") if mode == "DURATION" else ("BUY", "SELL")
     if pair not in symbols or side not in allowed_sides or amount < 10 or mode not in ("SPOT", "DURATION"):
         return {"error": "Invalid demo trade details. Minimum is KSh 10."}, 400
-    if mode == "DURATION" and duration not in (5, 15, 30, 60, 300, 900):
+    if mode == "DURATION" and duration not in (15, 30, 60, 300, 900):
         return {"error": "Choose a supported demo duration."}, 400
     try:
         # Demo orders use the latest live price supplied by the page's public market stream
@@ -258,11 +258,16 @@ def api_close_demo_trade(trade_id):
     symbols = {"BTC/USDT": "BTCUSDT", "ETH/USDT": "ETHUSDT", "SOL/USDT": "SOLUSDT"}
     with sqlite3.connect(DB) as con:
         row = con.execute(
-            "SELECT pair,side,amount,entry_price,status FROM trades WHERE id=? AND user_id=?",
+            "SELECT pair,side,amount,entry_price,status,mode,expires_at FROM trades WHERE id=? AND user_id=?",
             (trade_id, session["user_id"])
         ).fetchone()
         if not row or row[4] != "OPEN" or row[0] not in symbols:
             return {"error": "This trade is already closed or could not be found."}, 404
+        if row[5] == "DURATION" and row[6]:
+            expiry = con.execute("SELECT datetime(?) > CURRENT_TIMESTAMP", (row[6],)).fetchone()[0]
+            if expiry:
+                return {"error": "Fixed-time demo trades cannot be cashed out before expiry. Wait for the timer to finish."}, 400
+            return {"error": "This fixed-time demo trade is being settled automatically. Refresh your trades shortly."}, 400
         try:
             response = requests.get("https://data-api.binance.vision/api/v3/ticker/price",
                                     params={"symbol": symbols[row[0]]}, timeout=(1.5, 3))
@@ -292,7 +297,7 @@ def api_close_all_demo_trades():
     symbols = {"BTC/USDT": "BTCUSDT", "ETH/USDT": "ETHUSDT", "SOL/USDT": "SOLUSDT"}
     with sqlite3.connect(DB) as con:
         rows = con.execute(
-            "SELECT id,pair,side,amount,entry_price FROM trades WHERE user_id=? AND status='OPEN' ORDER BY id",
+            "SELECT id,pair,side,amount,entry_price FROM trades WHERE user_id=? AND status='OPEN' AND mode!='DURATION' ORDER BY id",
             (session["user_id"],)
         ).fetchall()
         if not rows:
