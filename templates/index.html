@@ -1,88 +1,76 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TRADEon — Trading</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TRADEON Kenya — Dashboard</title>
 <style>
-*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f4f6f8;color:#182230}
-header{background:#101828;color:#fff;padding:15px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
-.logo{font-size:22px;font-weight:900}.right{display:flex;align-items:center;gap:10px}.pill{font-size:12px;background:#263449;padding:7px 10px;border-radius:20px}.logout{color:#fff;text-decoration:none;font-size:12px}
-main{max-width:700px;margin:auto;padding:12px 12px 85px}
-.balance{background:#fff;border-radius:14px;padding:16px;margin-bottom:12px}.muted{color:#667085;font-size:13px}.amount{font-size:29px;font-weight:900;margin-top:5px}
-.market{background:#fff;border-radius:14px;padding:15px;margin-bottom:12px}.markettop{display:flex;justify-content:space-between;align-items:center}.pair{font-size:19px;font-weight:800}.price{font-size:25px;font-weight:900;margin:12px 0 2px}.up{color:#12b76a}.down{color:#f04438}
-.chart{height:190px;border-radius:10px;background:linear-gradient(180deg,#f8fafc,#eef2f6);position:relative;overflow:hidden;margin-top:12px}
-.chart svg{width:100%;height:100%}.tabs{display:flex;gap:8px;margin-bottom:12px;overflow:auto}.tab{background:#e9eef3;border:0;border-radius:9px;padding:9px 14px;font-weight:700;white-space:nowrap}.tab.active{background:#101828;color:#fff}
-.tradebox{background:#fff;border-radius:14px;padding:15px}.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.buy,.sell{border:0;border-radius:11px;padding:15px;font-weight:900;font-size:17px;color:#fff}.buy{background:#12b76a}.sell{background:#f04438}
-.amounts{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:12px 0}.amt{border:1px solid #d0d5dd;background:#fff;border-radius:9px;padding:10px;font-weight:700}.custom{width:100%;padding:12px;border:1px solid #d0d5dd;border-radius:9px}
-.signal{background:#101828;color:#fff;border-radius:14px;padding:15px;margin-top:12px}.signal a{color:#fff}.bottom{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #ddd;display:grid;grid-template-columns:repeat(4,1fr);padding:9px 5px;z-index:20}.bottom a{text-decoration:none;color:#475467;text-align:center;font-size:11px;font-weight:700}.bottom b{display:block;font-size:19px;margin-bottom:3px;color:#101828}
-@media(min-width:700px){main{padding-top:20px}.chart{height:240px}}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#f3f5f8;color:#182230}
+header{background:#101828;color:white;padding:16px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0}
+.logo{font-size:22px;font-weight:900;letter-spacing:.3px}.right{display:flex;gap:12px;align-items:center}.pill{background:#263449;padding:7px 10px;border-radius:20px;font-size:12px}.logout{color:#fff;text-decoration:none;font-size:13px}
+main{max-width:720px;margin:auto;padding:14px 12px 90px}.card{background:#fff;border-radius:14px;padding:16px;margin-bottom:12px;box-shadow:0 2px 8px #1018280a}
+.muted{color:#667085;font-size:13px}.balance{font-size:27px;font-weight:900;margin:7px 0}.notice{background:#fff8e6;border:1px solid #f5d98b;padding:12px;border-radius:10px;font-size:13px;line-height:1.45;margin-bottom:12px}
+.tabs{display:flex;gap:8px;margin-bottom:12px;overflow-x:auto}.tab{background:#e9eef3;border:0;border-radius:9px;padding:10px 13px;font-weight:700;white-space:nowrap}.tab.active{background:#101828;color:#fff}
+.marketTop{display:flex;justify-content:space-between;align-items:center}.pair{font-size:19px;font-weight:800}.price{font-size:26px;font-weight:900;margin:12px 0 4px;overflow-wrap:anywhere}.up{color:#079455}.down{color:#d92d20}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}.buy,.sell{border:0;border-radius:10px;padding:15px;font-weight:900;font-size:17px;color:#fff}.buy{background:#079455}.sell{background:#d92d20}
+.amounts{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:12px 0}.amt{border:1px solid #d0d5dd;background:white;border-radius:9px;padding:10px 4px;font-weight:700}.custom{width:100%;padding:13px;border:1px solid #d0d5dd;border-radius:9px;font-size:16px}
+.links{display:grid;grid-template-columns:1fr 1fr;gap:10px}.linkcard{display:block;padding:15px;background:#fff;border-radius:12px;text-decoration:none;color:#101828;border:1px solid #eaecf0;font-weight:700}.linkcard span{display:block;font-size:12px;color:#667085;font-weight:400;margin-top:5px}
+.bottom{position:fixed;bottom:0;left:0;right:0;background:white;border-top:1px solid #ddd;display:grid;grid-template-columns:repeat(4,1fr);padding:10px 5px}.bottom a{text-decoration:none;color:#475467;text-align:center;font-size:11px;font-weight:700}.bottom b{display:block;font-size:19px;margin-bottom:3px;color:#101828}
+@media(min-width:600px){main{padding-top:22px}}
 </style>
 </head>
 <body>
-<header><div class="logo">TRADEON</div><div class="right"><span class="pill">🇰🇪 KSh</span><a class="logout" href="/logout">Logout</a></div></header>
+<header><div class="logo">TRADEON</div><div class="right"><span class="pill">🇰🇪 KSh</span><a class="logout" href="/logout">Log out</a></div></header>
 <main>
-<section class="balance"><div class="muted">Welcome, {{ user_name }}</div><div class="amount">KSh 0.00</div><div class="muted">Available balance</div></section>
-
-<div class="tabs"><button class="tab active" onclick="setPair('BTC/USDT','BTCUSDT')">BTC/USDT</button><button class="tab" onclick="setPair('ETH/USDT','ETHUSDT')">ETH/USDT</button><button class="tab" onclick="setPair('SOL/USDT','SOLUSDT')">SOL/USDT</button></div>
-
-<section class="market">
-<div class="markettop"><span class="pair" id="pair">BTC/USDT</span><span class="up" id="change">--</span></div>
-<div class="price" id="price">Loading...</div><div class="muted" id="marketStatus">Live market price</div>
-<div class="chart"><svg viewBox="0 0 700 240" preserveAspectRatio="none"><polyline points="0,190 60,175 120,185 180,130 240,145 300,95 360,120 420,70 480,88 540,45 600,65 700,25" fill="none" stroke="#12b76a" stroke-width="5"/><polyline points="0,220 700,220" fill="none" stroke="#d0d5dd" stroke-width="2"/></svg></div>
-</section>
-
-<section class="tradebox">
-<h3 style="margin-top:0">Trade</h3>
-<div class="muted">Choose amount</div>
-<div class="amounts"><button class="amt" onclick="setAmount(100)">KSh 100</button><button class="amt" onclick="setAmount(500)">KSh 500</button><button class="amt" onclick="setAmount(1000)">KSh 1K</button><button class="amt" onclick="setAmount(5000)">KSh 5K</button></div>
-<input id="amount" class="custom" type="number" min="10" placeholder="Enter amount in KSh">
+<section class="card"><div class="muted">Welcome, {{ user_name }}</div><div class="balance">KSh {{ "%.2f"|format(wallet_balance) }}</div><div class="muted">Wallet balance</div></section>
+<div class="notice"><b>Demo status:</b> Market prices are informational. Orders are not sent to a cryptocurrency exchange. Do not deposit real money until payments and trading have been fully tested and approved.</div>
+<div class="tabs"><button class="tab active" data-pair="BTC/USDT" data-symbol="BTCUSDT" onclick="setPair(this)">BTC/USDT</button><button class="tab" data-pair="ETH/USDT" data-symbol="ETHUSDT" onclick="setPair(this)">ETH/USDT</button><button class="tab" data-pair="SOL/USDT" data-symbol="SOLUSDT" onclick="setPair(this)">SOL/USDT</button></div>
+<section class="card"><div class="marketTop"><span class="pair" id="pair">BTC/USDT</span><span id="change" class="muted">--</span></div><div class="price" id="price">Loading market price…</div><div class="muted" id="marketStatus">Checking public market data</div></section>
+<section class="card"><h3 style="margin-top:0">Demo trade</h3><div class="muted">Choose an amount in Kenyan shillings</div>
+<div class="amounts"><button class="amt" onclick="setAmount(100)">100</button><button class="amt" onclick="setAmount(500)">500</button><button class="amt" onclick="setAmount(1000)">1,000</button><button class="amt" onclick="setAmount(5000)">5,000</button></div>
+<input id="amount" class="custom" type="number" min="10" step="1" placeholder="Enter amount (minimum KSh 10)">
 <div class="actions" style="margin-top:12px"><button class="buy" onclick="trade('BUY')">BUY</button><button class="sell" onclick="trade('SELL')">SELL</button></div>
-</section>
-
-<section class="signal"><b>📈 Latest Signal</b><p style="margin-bottom:8px">Manager signals appear here.</p><a href="/signals">View all signals →</a></section>
+<p class="muted">These are simulated orders for testing only.</p></section>
+<div class="links"><a class="linkcard" href="/deposit">＋ Deposit<span>M-Pesa setup status</span></a><a class="linkcard" href="/signals">◈ Trading signals<span>View manager-published signals</span></a><a class="linkcard" href="/trades">⇄ My trades<span>Review your demo orders</span></a><a class="linkcard" href="/profile">👤 Profile<span>Your account details</span></a></div>
 </main>
 <nav class="bottom"><a href="/"><b>⌂</b>Home</a><a href="/trades"><b>⇄</b>Trades</a><a href="/deposit"><b>＋</b>Deposit</a><a href="/signals"><b>◈</b>Signals</a></nav>
 <script>
-function setAmount(v){document.getElementById('amount').value=v}
 let currentSymbol='BTCUSDT';
-function setPair(pair,symbol){
- currentSymbol=symbol;
- document.getElementById('pair').textContent=pair;
+function setAmount(value){document.getElementById('amount').value=value}
+function setPair(button){
+ currentSymbol=button.dataset.symbol;
+ document.getElementById('pair').textContent=button.dataset.pair;
+ document.querySelectorAll('.tab').forEach(el=>el.classList.toggle('active',el===button));
  loadPrice();
 }
 async function loadPrice(){
+ const price=document.getElementById('price'), changeEl=document.getElementById('change'), status=document.getElementById('marketStatus');
  try{
-  const response=await fetch('/api/market?symbol='+currentSymbol);
+  const response=await fetch('/api/market?symbol='+encodeURIComponent(currentSymbol));
   const data=await response.json();
   if(!response.ok) throw new Error(data.error||'Unavailable');
-  document.getElementById('price').textContent='
-</script>
-</body></html>+Number(data.price).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:8});
+  price.textContent=Number(data.price).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:8});
   const change=Number(data.change_percent);
-  const el=document.getElementById('change');
-  el.textContent=(change>=0?'+':'')+change.toFixed(2)+'%';
-  el.className=change>=0?'up':'down';
-  document.getElementById('marketStatus').textContent='Live market price • updated just now';
- }catch(e){
-  document.getElementById('price').textContent='Unavailable';
-  document.getElementById('marketStatus').textContent='Market data temporarily unavailable';
+  changeEl.textContent=(change>=0?'+':'')+change.toFixed(2)+'%';
+  changeEl.className=change>=0?'up':'down';
+  status.textContent='Source: '+(data.source||'market data')+' · refreshed just now';
+ }catch(error){
+  price.textContent='Temporarily unavailable';changeEl.textContent='--';
+  changeEl.className='muted';status.textContent='Could not retrieve public market data. Please try again shortly.';
  }
 }
-loadPrice();
-setInterval(loadPrice,15000);
 async function trade(side){
  const amount=Number(document.getElementById('amount').value);
- if(!amount||amount<10){alert('Enter at least KSh 10.');return}
+ if(!Number.isFinite(amount)||amount<10){alert('Enter at least KSh 10.');return}
+ const pair=document.getElementById('pair').textContent;
  try{
-  const response=await fetch('/api/trade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pair:document.getElementById('pair').textContent,side:side,amount:amount})});
+  const response=await fetch('/api/trade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pair,side,amount})});
   const data=await response.json();
-  if(!response.ok){alert(data.error||'Trade could not be opened.');return}
-  alert(side+' trade opened for KSh '+amount.toFixed(2)+' at 
-</script>
-</body></html>+Number(data.entry_price).toLocaleString());
+  if(!response.ok){alert(data.error||'Demo order could not be opened.');return}
+  alert('Demo '+side+' order recorded for KSh '+amount.toFixed(2)+'. This is not a live exchange trade.');
   window.location.href='/trades';
- }catch(e){alert('Unable to open trade right now.');}
+ }catch(error){alert('Unable to record the demo order right now.')}
 }
+loadPrice();
+setInterval(loadPrice,30000);
 </script>
 </body></html>
