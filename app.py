@@ -325,7 +325,8 @@ def manager_auto_signals():
                 (pair, action, f"{price:.8f}", f"{stop:.8f}", f"{target:.8f}", "Medium", note)
             )
         return redirect(url_for("manager_signals") + "?auto=draft")
-    except (requests.RequestException, KeyError, TypeError, ValueError, ZeroDivisionError):
+    except (requests.RequestException, KeyError, TypeError, ValueError, ZeroDivisionError) as exc:
+        app.logger.exception("Automatic signal generation failed: %s", exc)
         return redirect(url_for("manager_signals") + "?auto=data_error")
 
 @app.route("/manager/signals", methods=["GET", "POST"])
@@ -368,7 +369,7 @@ def manager_signals():
     .wrap{{overflow:auto}}table{{width:100%;min-width:850px;border-collapse:collapse;background:white}}th,td{{padding:9px;border-bottom:1px solid #eee;text-align:left;font-size:13px}}
     a{{color:white;text-decoration:none}}.error{{color:#b00020;font-weight:bold}}
     </style></head><body><header><b>TRADEON MANAGER — SIGNALS</b> &nbsp; <a href="/manager">Dashboard</a></header>
-    <main><h2>Automatic Signal Generator (TEST MODE)</h2><div class="card"><p>This checks Binance 1-hour candles using EMA and RSI. Generated signals are saved as hidden drafts and will not be visible to users until you publish them.</p><form method="post" action="/manager/auto-signals"><select name="pair"><option>BTC/USDT</option><option>ETH/USDT</option><option>SOL/USDT</option></select><button>Analyse Market & Generate Test Signal</button></form><p>After analysis, check the signal list below. New automatic signals start as Hidden drafts.</p></div><h2>Create Signal Manually</h2><div class="card">{("<p class='error'>"+error+"</p>") if error else ""}
+    <main><h2>Automatic Signal Generator (TEST MODE)</h2>{("<div class=\"card error\">Market data could not be loaded. Please try again later.</div>" if request.args.get("auto") == "data_error" else "<div class=\"card\">No clear EMA/RSI setup was found. Try again later.</div>" if request.args.get("auto") == "no_setup" else "<div class=\"card\">Test signal saved as a hidden draft. Review it below before publishing.</div>" if request.args.get("auto") == "draft" else "")}<div class="card"><p>This checks Binance 1-hour candles using EMA and RSI. Generated signals are saved as hidden drafts and will not be visible to users until you publish them.</p><form method="post" action="/manager/auto-signals"><select name="pair"><option>BTC/USDT</option><option>ETH/USDT</option><option>SOL/USDT</option></select><button>Analyse Market & Generate Test Signal</button></form><p>After analysis, check the signal list below. New automatic signals start as Hidden drafts.</p></div><h2>Create Signal Manually</h2><div class="card">{("<p class='error'>"+error+"</p>") if error else ""}
     <form method="post">
       <div class="grid"><select name="pair" required><option value="BTC/USD">BTC/USD</option><option value="BTC/USDT">BTC/USDT</option><option value="ETH/USD">ETH/USD</option><option value="ETH/USDT">ETH/USDT</option><option value="SOL/USDT">SOL/USDT</option><option value="BNB/USDT">BNB/USDT</option><option value="XRP/USDT">XRP/USDT</option></select>
       <select name="action"><option value="BUY">BUY</option><option value="SELL">SELL</option></select></div>
