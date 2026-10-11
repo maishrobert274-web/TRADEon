@@ -33,6 +33,26 @@ def init_db():
         con.executemany("INSERT OR IGNORE INTO app_settings (key,value) VALUES (?,?)", [("demo_win_percent","20"),("demo_loss_percent","100"),("demo_default_duration","15")])
 init_db()
 
+def init_manager_wallet_controls():
+    with sqlite3.connect(DB) as con:
+        cols = [r[1] for r in con.execute("PRAGMA table_info(users)").fetchall()]
+        if "blocked" not in cols:
+            con.execute("ALTER TABLE users ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0")
+        if "block_reason" not in cols:
+            con.execute("ALTER TABLE users ADD COLUMN block_reason TEXT")
+        con.execute("""CREATE TABLE IF NOT EXISTS wallet_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            admin_username TEXT NOT NULL,
+            transaction_type TEXT NOT NULL,
+            amount REAL NOT NULL,
+            balance_after REAL NOT NULL,
+            reason TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""")
+
+init_manager_wallet_controls()
+
 def normalize_phone(phone):
     p = phone.strip().replace(" ", "").replace("-", "")
     if p.startswith("07") or p.startswith("01"):
@@ -97,6 +117,10 @@ def login():
                 (phone,)
             ).fetchone()
         if user and check_password_hash(user[2], password):
+            with sqlite3.connect(DB) as con:
+                blocked_row = con.execute("SELECT blocked FROM users WHERE id=?", (user[0],)).fetchone()
+            if blocked_row and blocked_row[0]:
+                return render_template("login.html", error="This account is blocked. Contact TRADEON support.")
             session["user_id"] = user[0]
             session["user_name"] = user[1]
             return redirect(url_for("home"))
@@ -892,7 +916,94 @@ def manager_dashboard():
         f"<tr><td>{d[0]}</td><td>{d[1]}</td><td>{d[2]}</td><td>KSh {d[3]:,.2f}</td><td>{d[4]}</td><td>{d[5] or '-'}</td><td>{d[6]}</td></tr>"
         for d in deposits
     )
-    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Manager</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa;color:#111}}header{{background:#111;color:white;padding:18px 5%;display:flex;justify-content:space-between}}main{{padding:24px 5%}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}}.card{{background:white;padding:18px;border-radius:12px;box-shadow:0 2px 10px #0001}}table{{width:100%;border-collapse:collapse;background:white;margin-top:20px;font-size:13px}}th,td{{padding:10px;border-bottom:1px solid #eee;text-align:left}}.tablewrap{{overflow:auto}}a{{color:white}}</style></head><body><header><b>TRADEON MANAGER</b><a href="/manager/logout">Logout</a></header><main><p><a href="/manager/users" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">👥 Manage Users</a></p><p><a href="/manager/signals" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">📈 Create & Manage Signals</a></p><p><a href="/manager/settings" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">⚙️ Demo Trading Settings</a></p><h2>Dashboard</h2><div class="cards"><div class="card"><b>Users</b><h2>{users}</h2></div><div class="card"><b>Verified</b><h2>{verified}</h2></div><div class="card"><b>Pending deposits</b><h2>{pending}</h2></div><div class="card"><b>Successful deposits</b><h2>KSh {successful:,.2f}</h2></div></div><h2>Recent deposits</h2><div class="tablewrap"><table><tr><th>ID</th><th>User</th><th>Phone</th><th>Amount</th><th>Status</th><th>Receipt</th><th>Date</th></tr>{rows or "<tr><td colspan='7'>No deposits yet.</td></tr>"}</table></div></main></body></html>"""
+    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Manager</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa;color:#111}}header{{background:#111;color:white;padding:18px 5%;display:flex;justify-content:space-between}}main{{padding:24px 5%}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}}.card{{background:white;padding:18px;border-radius:12px;box-shadow:0 2px 10px #0001}}table{{width:100%;border-collapse:collapse;background:white;margin-top:20px;font-size:13px}}th,td{{padding:10px;border-bottom:1px solid #eee;text-align:left}}.tablewrap{{overflow:auto}}a{{color:white}}</style></head><body><header><b>TRADEON MANAGER</b><a href="/manager/logout">Logout</a></header><main><p><a href="/manager/users" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">👥 Manage Users</a></p><p><a href="/manager/wallets" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">💰 Manage Balances & Blocking</a></p><p><a href="/manager/signals" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">📈 Create & Manage Signals</a></p><p><a href="/manager/settings" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">⚙️ Demo Trading Settings</a></p><h2>Dashboard</h2><div class="cards"><div class="card"><b>Users</b><h2>{users}</h2></div><div class="card"><b>Verified</b><h2>{verified}</h2></div><div class="card"><b>Pending deposits</b><h2>{pending}</h2></div><div class="card"><b>Successful deposits</b><h2>KSh {successful:,.2f}</h2></div></div><h2>Recent deposits</h2><div class="tablewrap"><table><tr><th>ID</th><th>User</th><th>Phone</th><th>Amount</th><th>Status</th><th>Receipt</th><th>Date</th></tr>{rows or "<tr><td colspan='7'>No deposits yet.</td></tr>"}</table></div></main></body></html>"""
+
+
+@app.route("/manager/wallets", methods=["GET", "POST"])
+def manager_wallets():
+    if not admin_required():
+        return redirect(url_for("manager_login"))
+    message = ""
+    admin_name = os.environ.get("ADMIN_USERNAME", "admin")
+    if request.method == "POST":
+        try:
+            user_id = int(request.form.get("user_id", "0"))
+            action = request.form.get("action", "")
+            if action in ("credit", "debit"):
+                amount = round(float(request.form.get("amount", "0")), 2)
+                reason = request.form.get("reason", "").strip()
+                if amount <= 0 or amount > 10000000 or not reason:
+                    raise ValueError
+                with sqlite3.connect(DB) as con:
+                    user = con.execute("SELECT id FROM users WHERE id=?", (user_id,)).fetchone()
+                    if not user:
+                        message = "User not found."
+                    else:
+                        con.execute("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)", (user_id,))
+                        current = con.execute("SELECT balance FROM wallets WHERE user_id=?", (user_id,)).fetchone()[0]
+                        delta = amount if action == "credit" else -amount
+                        new_balance = round(current + delta, 2)
+                        if new_balance < 0:
+                            message = "Cannot deduct more than the current balance."
+                        else:
+                            con.execute("UPDATE wallets SET balance=? WHERE user_id=?", (new_balance, user_id))
+                            con.execute("INSERT INTO wallet_transactions (user_id,admin_username,transaction_type,amount,balance_after,reason) VALUES (?,?,?,?,?,?)",
+                                        (user_id, admin_name, action, amount, new_balance, reason))
+                            message = "Balance updated and transaction recorded."
+            elif action in ("block", "unblock"):
+                reason = request.form.get("reason", "").strip() or "Blocked by manager"
+                with sqlite3.connect(DB) as con:
+                    if action == "block":
+                        con.execute("UPDATE users SET blocked=1, block_reason=? WHERE id=?", (reason, user_id))
+                        message = "User blocked."
+                    else:
+                        con.execute("UPDATE users SET blocked=0, block_reason=NULL WHERE id=?", (user_id,))
+                        message = "User unblocked."
+            else:
+                message = "Unknown action."
+        except (ValueError, TypeError):
+            message = "Enter a valid user ID, amount, and reason."
+    q = request.args.get("q", "").strip()
+    with sqlite3.connect(DB) as con:
+        like = "%" + q + "%"
+        users = con.execute("""SELECT u.id,u.name,u.phone,COALESCE(w.balance,0),COALESCE(u.blocked,0),COALESCE(u.block_reason,'')
+                               FROM users u LEFT JOIN wallets w ON w.user_id=u.id
+                               WHERE u.name LIKE ? OR u.phone LIKE ? ORDER BY u.id DESC""", (like,like)).fetchall()
+        txns = con.execute("""SELECT t.id,u.name,t.transaction_type,t.amount,t.balance_after,t.reason,t.admin_username,t.created_at
+                              FROM wallet_transactions t JOIN users u ON u.id=t.user_id
+                              ORDER BY t.id DESC LIMIT 100""").fetchall()
+    user_rows = ""
+    for u in users:
+        status = "BLOCKED" if u[4] else "ACTIVE"
+        user_rows += (
+            "<tr><td>" + str(u[0]) + "</td><td>" + u[1] + "</td><td>" + u[2] +
+            "</td><td>KSh " + format(u[3], ",.2f") + "</td><td>" + status +
+            "</td><td>" + (u[5] or "-") + "</td><td><form method='post'>"
+            "<input type='hidden' name='user_id' value='" + str(u[0]) + "'>"
+            "<select name='action'><option value='credit'>Add funds</option><option value='debit'>Deduct funds</option><option value='block'>Block</option><option value='unblock'>Unblock</option></select>"
+            "<input name='amount' type='number' min='0.01' step='0.01' placeholder='KSh amount'>"
+            "<input name='reason' maxlength='200' placeholder='Reason / reference' required>"
+            "<button>Apply</button></form></td></tr>"
+        )
+    txn_rows = ""
+    for t in txns:
+        txn_rows += ("<tr><td>" + str(t[0]) + "</td><td>" + t[1] + "</td><td>" + t[2].upper() +
+                     "</td><td>KSh " + format(t[3], ",.2f") + "</td><td>KSh " + format(t[4], ",.2f") +
+                     "</td><td>" + t[5] + "</td><td>" + t[6] + "</td><td>" + t[7] + "</td></tr>")
+    return """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>TRADEON Wallets</title><style>body{font-family:Arial;background:#f4f6f8;margin:0;color:#111}
+    header{background:#111;color:white;padding:18px}main{padding:18px}.wrap{overflow:auto}
+    table{width:100%;min-width:900px;border-collapse:collapse;background:white;margin:12px 0 28px}
+    th,td{padding:9px;border-bottom:1px solid #ddd;text-align:left;font-size:13px}
+    input,select,button{padding:8px;margin:3px;max-width:150px}button{background:#111;color:white}
+    .msg{background:#e6f4ea;padding:10px}</style></head><body><header><b>TRADEON MANAGER — WALLETS & ACCESS</b>
+    &nbsp; <a style="color:white" href="/manager">Dashboard</a></header><main><h2>User balances and account access</h2>
+    <p class="msg">""" + message + """</p><form method="get"><input name="q" value="""" + q + """" placeholder="Search name or phone"><button>Search</button></form>
+    <div class="wrap"><table><tr><th>ID</th><th>Name</th><th>Phone</th><th>Real balance</th><th>Status</th><th>Block reason</th><th>Manager action</th></tr>""" +
+    (user_rows or "<tr><td colspan='7'>No users found.</td></tr>") + """</table></div>
+    <h2>Recent manual balance transactions</h2><div class="wrap"><table><tr><th>ID</th><th>User</th><th>Type</th><th>Amount</th><th>Balance after</th><th>Reason</th><th>Manager</th><th>Date</th></tr>""" +
+    (txn_rows or "<tr><td colspan='8'>No manual transactions yet.</td></tr>") + """</table></div></main></body></html>"""
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
