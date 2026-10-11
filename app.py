@@ -1,6 +1,7 @@
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3, os, requests, base64
+import csv, io, zipfile
 from datetime import datetime
 
 app = Flask(__name__)
@@ -936,6 +937,45 @@ def manager_settings():
     duration = settings.get("demo_default_duration", "15")
     return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Demo Settings</title><style>body{{font-family:Arial;background:#f5f7fa;margin:0;color:#111}}header{{background:#111;color:white;padding:18px 5%}}main{{max-width:650px;margin:auto;padding:24px 5%}}form{{background:white;padding:20px;border-radius:12px}}label{{display:block;margin-top:14px;font-weight:bold}}input,select,button{{box-sizing:border-box;width:100%;padding:12px;margin-top:6px;border:1px solid #ccc;border-radius:8px}}button{{background:#111;color:white;font-weight:bold}}.note{{background:#fff3cd;padding:12px;border-radius:8px}}</style></head><body><header><b>TRADEON MANAGER — SETTINGS</b></header><main><p><a href="/manager">← Back to dashboard</a></p><h2>Demo trading controls</h2><p class="note"><b>DEMO ONLY.</b> These controls affect simulated trades only, not real-money trades or Binance prices.</p><p>{message}</p><form method="post"><label>Simulated profit on a winning demo trade (%)</label><input type="number" min="0" max="100" step="0.1" name="demo_win_percent" value="{win}" required><label>Simulated loss on a losing demo trade (%)</label><input type="number" min="0" max="100" step="0.1" name="demo_loss_percent" value="{loss}" required><label>Default demo trade duration</label><select name="demo_default_duration"><option value="15" {"selected" if duration=="15" else ""}>15 seconds</option><option value="30" {"selected" if duration=="30" else ""}>30 seconds</option><option value="60" {"selected" if duration=="60" else ""}>1 minute</option><option value="300" {"selected" if duration=="300" else ""}>5 minutes</option><option value="900" {"selected" if duration=="900" else ""}>15 minutes</option></select><button type="submit">Save demo settings</button></form></main></body></html>"""
 
+@app.route("/manager/backup/monthly")
+def manager_monthly_backup():
+    if not admin_required():
+        return redirect(url_for("manager_login"))
+    # Download a complete, point-in-time backup. The filename identifies the
+    # month in which it was downloaded; CSV files are easy to inspect or restore.
+    memory_file = io.BytesIO()
+    exported_at = datetime.now()
+    with sqlite3.connect(DB) as con:
+        con.row_factory = sqlite3.Row
+        tables = con.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+        ).fetchall()
+        with zipfile.ZipFile(memory_file, "w", zipfile.ZIP_DEFLATED) as archive:
+            for table_row in tables:
+                table = table_row["name"]
+                # Table names come only from this database's schema.
+                rows = con.execute('SELECT * FROM "' + table.replace('"', '""') + '"').fetchall()
+                output = io.StringIO(newline="")
+                writer = csv.writer(output)
+                if rows:
+                    writer.writerow(rows[0].keys())
+                    for row in rows:
+                        writer.writerow([row[key] for key in row.keys()])
+                else:
+                    columns = con.execute('PRAGMA table_info("' + table.replace('"', '""') + '")').fetchall()
+                    writer.writerow([column["name"] for column in columns])
+                archive.writestr(table + ".csv", output.getvalue())
+            archive.writestr(
+                "BACKUP_INFO.txt",
+                "TRADEON full database snapshot\n"
+                + "Downloaded at: " + exported_at.isoformat(timespec="seconds") + "\n"
+                + "Includes all rows from each application database table as CSV.\n"
+                + "Store this ZIP securely; it may contain private user information.\n"
+            )
+    memory_file.seek(0)
+    filename = "TRADEON_monthly_backup_" + exported_at.strftime("%Y-%m") + ".zip"
+    return send_file(memory_file, mimetype="application/zip", as_attachment=True, download_name=filename)
+
 @app.route("/manager")
 def manager_dashboard():
     if not admin_required():
@@ -954,7 +994,7 @@ def manager_dashboard():
         f"<tr><td>{d[0]}</td><td>{d[1]}</td><td>{d[2]}</td><td>KSh {d[3]:,.2f}</td><td>{d[4]}</td><td>{d[5] or '-'}</td><td>{d[6]}</td></tr>"
         for d in deposits
     )
-    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Manager</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa;color:#111}}header{{background:#111;color:white;padding:18px 5%;display:flex;justify-content:space-between}}main{{padding:24px 5%}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}}.card{{background:white;padding:18px;border-radius:12px;box-shadow:0 2px 10px #0001}}table{{width:100%;border-collapse:collapse;background:white;margin-top:20px;font-size:13px}}th,td{{padding:10px;border-bottom:1px solid #eee;text-align:left}}.tablewrap{{overflow:auto}}a{{color:white}}</style></head><body><header><b>TRADEON MANAGER</b><a href="/manager/logout">Logout</a></header><main><p><a href="/manager/users" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">👥 Manage Users</a></p><p><a href="/manager/wallets" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">💰 Manage Balances & Blocking</a></p><p><a href="/manager/signals" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">📈 Create & Manage Signals</a></p><p><a href="/manager/settings" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">⚙️ Demo Trading Settings</a></p><h2>Dashboard</h2><div class="cards"><div class="card"><b>Users</b><h2>{users}</h2></div><div class="card"><b>Verified</b><h2>{verified}</h2></div><div class="card"><b>Pending deposits</b><h2>{pending}</h2></div><div class="card"><b>Successful deposits</b><h2>KSh {successful:,.2f}</h2></div></div><h2>Recent deposits</h2><div class="tablewrap"><table><tr><th>ID</th><th>User</th><th>Phone</th><th>Amount</th><th>Status</th><th>Receipt</th><th>Date</th></tr>{rows or "<tr><td colspan='7'>No deposits yet.</td></tr>"}</table></div></main></body></html>"""
+    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Manager</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa;color:#111}}header{{background:#111;color:white;padding:18px 5%;display:flex;justify-content:space-between}}main{{padding:24px 5%}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}}.card{{background:white;padding:18px;border-radius:12px;box-shadow:0 2px 10px #0001}}table{{width:100%;border-collapse:collapse;background:white;margin-top:20px;font-size:13px}}th,td{{padding:10px;border-bottom:1px solid #eee;text-align:left}}.tablewrap{{overflow:auto}}a{{color:white}}</style></head><body><header><b>TRADEON MANAGER</b><a href="/manager/logout">Logout</a></header><main><p><a href="/manager/users" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">👥 Manage Users</a></p><p><a href="/manager/wallets" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">💰 Manage Balances & Blocking</a></p><p><a href="/manager/signals" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">📈 Create & Manage Signals</a></p><p><a href="/manager/settings" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">⚙️ Demo Trading Settings</a></p><p><a href="/manager/backup/monthly" style="display:inline-block;background:#0b6b3a;color:white;padding:12px 14px;border-radius:8px;text-decoration:none;font-weight:bold">⬇️ Download Monthly Data Backup (ZIP)</a></p><p style="font-size:13px;color:#555">Downloads a complete snapshot of all database tables as CSV files in a ZIP archive. Download and store it safely every month.</p><h2>Dashboard</h2><div class="cards"><div class="card"><b>Users</b><h2>{users}</h2></div><div class="card"><b>Verified</b><h2>{verified}</h2></div><div class="card"><b>Pending deposits</b><h2>{pending}</h2></div><div class="card"><b>Successful deposits</b><h2>KSh {successful:,.2f}</h2></div></div><h2>Recent deposits</h2><div class="tablewrap"><table><tr><th>ID</th><th>User</th><th>Phone</th><th>Amount</th><th>Status</th><th>Receipt</th><th>Date</th></tr>{rows or "<tr><td colspan='7'>No deposits yet.</td></tr>"}</table></div></main></body></html>"""
 
 
 @app.route("/manager/wallets", methods=["GET", "POST"])
