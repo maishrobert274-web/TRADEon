@@ -287,27 +287,71 @@ def market_history():
     symbol = request.args.get("symbol", "BTCUSDT").upper()
     interval = request.args.get("interval", "1h").lower()
     products = {"BTCUSDT": "BTC-USD", "ETHUSDT": "ETH-USD", "SOLUSDT": "SOL-USD"}
-    granularities = {"1m": 60, "5m": 300, "15m": 900, "1h": 3600, "1d": 86400}
+    allowed_intervals = {"1m", "5m", "15m", "1h", "4h", "1d"}
+    coinbase_granularities = {"1m": 60, "5m": 300, "15m": 900, "1h": 3600, "1d": 86400}
     if symbol not in products:
         return {"error": "unsupported symbol"}, 400
-    if interval not in granularities:
+    if interval not in allowed_intervals:
         return {"error": "unsupported interval"}, 400
+    cache_key = f"history:{symbol}:{interval}"
+    now = datetime.now().timestamp()
+    cached = MARKET_CACHE.get(cache_key)
+    if cached and now - cached["cached_at"] < 30:
+        return {key: value for key, value in cached.items() if key != "cached_at"}
+    # Prefer Binance OHLC candles; use Coinbase as a fallback.
     try:
         response = requests.get(
+            "https://data-api.binance.vision/api/v3/klines",
+            params={"symbol": symbol, "interval": interval, "limit": 60},
+            timeout=(0.8, 1.8)
+        )
+        response.raise_for_status()
+        raw = response.json()
+        points = [{
+            "time": int(c[0] // 1000), "open": float(c[1]), "high": float(c[2]),
+            "low": float(c[3]), "close": float(c[4]), "volume": float(c[5]),
+            "price": float(c[4])
+        } for c in raw]
+        if len(points) >= 2:
+            result = {"symbol": symbol, "interval": interval, "points": points, "source": "Binance"}
+            MARKET_CACHE[cache_key] = {**result, "cached_at": datetime.now().timestamp()}
+            return result
+    except (requests.RequestException, KeyError, TypeError, ValueError):
+        pass
+    try:
+        granularity = 3600 if interval == "4h" else coinbase_granularities.get(interval)
+        response = requests.get(
             f"https://api.exchange.coinbase.com/products/{products[symbol]}/candles",
-            params={"granularity": granularities[interval]},
+            params={"granularity": granularity},
             headers={"User-Agent": "TRADEON-price-chart"},
-            timeout=(1.5, 3)
+            timeout=(1.0, 2.0)
         )
         response.raise_for_status()
         candles = sorted(response.json(), key=lambda candle: candle[0])
-        # Coinbase rows: [time, low, high, open, close, volume]
-        points = [{"time": int(c[0]), "low": float(c[1]), "high": float(c[2]),
-                   "open": float(c[3]), "close": float(c[4]), "volume": float(c[5]),
-                   "price": float(c[4])} for c in candles[-40:]]
+        if interval == "4h":
+            grouped = {}
+            for c in candles:
+                bucket = int(c[0]) - (int(c[0]) % 14400)
+                if bucket not in grouped:
+                    grouped[bucket] = {"time": bucket, "low": float(c[1]), "high": float(c[2]),
+                                        "open": float(c[3]), "close": float(c[4]), "volume": float(c[5])}
+                else:
+                    g = grouped[bucket]
+                    g["low"] = min(g["low"], float(c[1]))
+                    g["high"] = max(g["high"], float(c[2]))
+                    g["close"] = float(c[4])
+                    g["volume"] += float(c[5])
+            points = [dict(p, price=p["close"]) for p in sorted(grouped.values(), key=lambda p: p["time"])]
+        else:
+            points = [{"time": int(c[0]), "low": float(c[1]), "high": float(c[2]),
+                       "open": float(c[3]), "close": float(c[4]), "volume": float(c[5]),
+                       "price": float(c[4])} for c in candles]
+        points = points[-60:]
         if len(points) < 2:
             return {"error": "Not enough chart data yet."}, 503
-        return {"symbol": symbol, "interval": interval, "points": points, "source": "Coinbase"}
+        result = {"symbol": symbol, "interval": interval, "points": points, "source": "Coinbase"}
+        MARKET_CACHE[cache_key] = {**result, "cached_at": datetime.now().timestamp()}
+        return result
     except (requests.RequestException, KeyError, TypeError, ValueError):
         return {"error": "Price chart data is temporarily unavailable."}, 503
 
