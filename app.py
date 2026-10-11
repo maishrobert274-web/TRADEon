@@ -847,7 +847,12 @@ def profile():
             message = "Profile updated."
     with sqlite3.connect(DB) as con:
         user = con.execute("SELECT name,phone,country FROM users WHERE id=?", (session["user_id"],)).fetchone()
-    return render_template("profile.html", user_name=user[0], phone=user[1], country=user[2], message=message, error=error)
+    # A browser may retain an old login cookie after the server database changes.
+    # Handle that stale session gracefully instead of raising a 500 error.
+    if user is None:
+        session.clear()
+        return render_template("login.html", error="Your session has expired or this account is no longer available. Please log in again, or register a new account if needed."), 401
+    return render_template("profile.html", user_name=user[0] or "", phone=user[1] or "", country=user[2] or "Kenya", message=message, error=error)
 
 @app.route("/refer")
 def refer():
