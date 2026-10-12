@@ -9,36 +9,75 @@
 .logo{font-size:25px;font-weight:800}.back{color:#9fb0c7;text-decoration:none}
 .card{background:#101d2d;border:1px solid #24364d;border-radius:18px;padding:22px}
 h1{margin:0 0 8px;font-size:24px}p{color:#9fb0c7;line-height:1.5}
-label{display:block;margin:20px 0 8px;font-weight:700}input{width:100%;padding:16px;border-radius:12px;border:1px solid #344a63;background:#081522;color:#fff;font-size:18px}
+label{display:block;margin:20px 0 8px;font-weight:700}input,select{width:100%;padding:16px;border-radius:12px;border:1px solid #344a63;background:#081522;color:#fff;font-size:16px}
 .quick{display:flex;gap:8px;margin:12px 0}.quick button{flex:1;padding:11px;border:1px solid #344a63;background:#15263a;color:#fff;border-radius:10px}
 .main{width:100%;padding:16px;border:0;border-radius:12px;background:#1f8f5f;color:#fff;font-weight:800;font-size:16px;margin-top:15px}
 .note{margin-top:18px;padding:14px;background:#0b1725;border-radius:12px;color:#aebed0;font-size:14px}
 .error{background:#3a1820;color:#ffb5bd;padding:12px;border-radius:10px;margin-bottom:12px}
 .success{background:#123525;color:#a9f0c8;padding:14px;border-radius:10px;margin-bottom:12px}
- .bottom-nav{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));background:#10151b;border-top:1px solid #29313a;box-shadow:0 -6px 20px #0005}.bottom-nav a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:48px;border:1px solid #303b48;border-radius:9px;background:#202833;color:#dce5ed;text-decoration:none;font-size:10px;font-weight:800}.bottom-nav span{font-size:16px;color:#20c997}.wrap{padding-bottom:100px}\n</style>
+.bank-details{background:#0b1725;border:1px solid #344a63;padding:14px;border-radius:12px;margin-top:12px;line-height:1.7}
+.bottom-nav{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));background:#10151b;border-top:1px solid #29313a;box-shadow:0 -6px 20px #0005}.bottom-nav a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:48px;border:1px solid #303b48;border-radius:9px;background:#202833;color:#dce5ed;text-decoration:none;font-size:10px;font-weight:800}.bottom-nav span{font-size:16px;color:#20c997}.wrap{padding-bottom:100px}
+</style>
 </head>
 <body>
 <div class="wrap">
 <div class="top"><div class="logo">TRADEON</div><a class="back" href="/">← Dashboard</a></div>
 <div class="card">
 <h1>Deposit KSh</h1>
-<p>Add funds to your TRADEON wallet using M-Pesa.</p>
+<p>Choose a payment method to add funds to your TRADEON wallet.</p>
 {% if error %}<div class="error">{{ error }}</div>{% endif %}
 {% if message %}<div class="success">{{ message }}</div>{% endif %}
 <form method="post">
-<label for="phone">M-Pesa phone number</label><input id="phone" name="phone" type="tel" inputmode="numeric" placeholder="07XXXXXXXX" required><label for="amount">Amount (KSh)</label>
-<input id="amount" name="amount" type="number" min="10" max="150000" step="1" placeholder="Enter amount" value="{{ amount }}">
+<label for="payment_method">Payment method</label>
+<select id="payment_method" name="payment_method" onchange="togglePaymentFields()">
+<option value="MPESA" {% if payment_method != 'COOP_BANK' %}selected{% endif %}>M-Pesa</option>
+<option value="COOP_BANK" {% if payment_method == 'COOP_BANK' %}selected{% endif %}>Co-op Bank transfer</option>
+</select>
+<div id="mpesaFields">
+<label for="phone">M-Pesa phone number</label>
+<input id="phone" name="phone" type="tel" inputmode="numeric" placeholder="07XXXXXXXX">
+</div>
+<div id="coopFields" hidden>
+<div class="bank-details">
+<b>Co-op Bank transfer details</b><br>
+{% if coop_account_name and coop_account_number %}
+Account name: {{ coop_account_name }}<br>
+Account number: {{ coop_account_number }}<br>
+{% if coop_branch %}Branch: {{ coop_branch }}<br>{% endif %}
+Use your TRADEON account phone number or user ID as the transfer reference if your bank asks for one.
+{% else %}
+<p>Co-op Bank account details have not been configured yet. Please contact TRADEON support. Do not transfer money until the correct account details are displayed here.</p>
+{% endif %}
+</div>
+<label for="payment_reference">Bank transfer reference</label>
+<input id="payment_reference" name="payment_reference" maxlength="100" placeholder="Enter the reference shown on your transfer receipt">
+<p>Submit this only after making the bank transfer. The deposit will remain pending until the payment is verified.</p>
+</div>
+<label for="amount">Amount (KSh)</label>
+<input id="amount" name="amount" type="number" min="10" max="150000" step="1" placeholder="Enter amount" value="{{ amount }}" required>
 <div class="quick">
-<button type="button" onclick="amount.value=30">30</button>
-<button type="button" onclick="amount.value=100">100</button>
-<button type="button" onclick="amount.value=500">500</button>
-<button type="button" onclick="amount.value=1000">1,000</button>
+<button type="button" onclick="document.getElementById('amount').value=30">30</button>
+<button type="button" onclick="document.getElementById('amount').value=100">100</button>
+<button type="button" onclick="document.getElementById('amount').value=500">500</button>
+<button type="button" onclick="document.getElementById('amount').value=1000">1,000</button>
 </div>
-<button class="main" type="submit">Continue with M-Pesa</button>
+<button class="main" id="submitButton" type="submit">Continue with M-Pesa</button>
 </form>
-<div class="note"><b>How it works:</b> Enter your M-Pesa number and amount. TRADEON requests an M-Pesa prompt. Your wallet is credited only after Safaricom sends a successful callback.</div>
+<div class="note"><b>Payment safety:</b> M-Pesa deposits are credited only after Safaricom confirms payment. Co-op Bank transfers stay pending until TRADEON verifies the transfer; entering a reference alone never credits your wallet.</div>
 </div>
 </div>
+<script>
+function togglePaymentFields(){
+ const method=document.getElementById('payment_method').value;
+ const mpesa=method==='MPESA';
+ document.getElementById('mpesaFields').hidden=!mpesa;
+ document.getElementById('coopFields').hidden=mpesa;
+ document.getElementById('phone').required=mpesa;
+ document.getElementById('payment_reference').required=!mpesa;
+ document.getElementById('submitButton').textContent=mpesa?'Continue with M-Pesa':'Submit bank transfer for verification';
+}
+togglePaymentFields();
+</script>
 <nav class="bottom-nav" aria-label="Main sections"><a href="/trades"><span>↔</span>Trades</a><a href="/signals"><span>◈</span>Insights</a><a href="/trade"><span>⌁</span>Buy/Sell</a><a href="/social-trading"><span>◎</span>Social Trading</a><a href="/deposit"><span>＋</span>Deposit</a></nav>
 </body>
 </html>
