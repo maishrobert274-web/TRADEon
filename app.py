@@ -22,6 +22,11 @@ def init_db():
         if "country" not in cols:
             con.execute("ALTER TABLE users ADD COLUMN country TEXT NOT NULL DEFAULT 'Kenya'")
         con.execute("""CREATE TABLE IF NOT EXISTS deposits (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, amount REAL NOT NULL, phone TEXT NOT NULL, merchant_request_id TEXT, checkout_request_id TEXT UNIQUE, mpesa_receipt TEXT, status TEXT NOT NULL DEFAULT "PENDING", created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
+        deposit_cols = [r[1] for r in con.execute("PRAGMA table_info(deposits)").fetchall()]
+        if "payment_method" not in deposit_cols:
+            con.execute("ALTER TABLE deposits ADD COLUMN payment_method TEXT NOT NULL DEFAULT 'MPESA'")
+        if "payment_reference" not in deposit_cols:
+            con.execute("ALTER TABLE deposits ADD COLUMN payment_reference TEXT")
         con.execute("""CREATE TABLE IF NOT EXISTS wallets (user_id INTEGER PRIMARY KEY, balance REAL NOT NULL DEFAULT 0)""")
         con.execute("""CREATE TABLE IF NOT EXISTS demo_wallets (user_id INTEGER PRIMARY KEY, balance REAL NOT NULL DEFAULT 10000)""")
         con.execute("""CREATE TABLE IF NOT EXISTS trades (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, pair TEXT NOT NULL, side TEXT NOT NULL, amount REAL NOT NULL, entry_price REAL NOT NULL, status TEXT NOT NULL DEFAULT "OPEN", pnl REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, closed_at TEXT)""")
@@ -156,49 +161,76 @@ def deposit():
     error = None
     message = None
     amount = request.form.get("amount", "").strip() if request.method == "POST" else ""
+    payment_method = request.form.get("payment_method", "MPESA").strip().upper()
+    payment_reference = request.form.get("payment_reference", "").strip()
+    coop_account_name = os.environ.get("COOP_ACCOUNT_NAME", "").strip()
+    coop_account_number = os.environ.get("COOP_ACCOUNT_NUMBER", "").strip()
+    coop_branch = os.environ.get("COOP_BRANCH", "").strip()
+
     if request.method == "POST":
-        phone = normalize_phone(request.form.get("phone", "")).replace("+", "")
         try:
             value = float(amount)
             if value < 10 or value > 150000:
                 error = "Enter an amount between KSh 10 and KSh 150,000."
-            elif not (phone.isdigit() and phone.startswith("254") and len(phone) == 12):
-                error = "Enter a valid Kenyan M-Pesa number."
-            else:
-                shortcode = os.environ.get("MPESA_SHORTCODE")
-                passkey = os.environ.get("MPESA_PASSKEY")
-                callback_base = os.environ.get("MPESA_CALLBACK_BASE_URL", os.environ.get("RENDER_EXTERNAL_URL", "")).rstrip("/")
-                if not shortcode or not passkey or not callback_base:
-                    error = "M-Pesa integration is not configured on the server yet."
+            elif payment_method == "COOP_BANK":
+                if not coop_account_name or not coop_account_number:
+                    error = "Co-op Bank deposits are not configured yet. Please contact TRADEON support."
+                elif not payment_reference or len(payment_reference) > 100:
+                    error = "Enter the Co-op Bank transfer reference after making your transfer."
                 else:
-                    token = daraja_token()
-                    ts = mpesa_timestamp()
-                    payload = {
-                        "BusinessShortCode": shortcode,
-                        "Password": mpesa_password(shortcode, passkey, ts),
-                        "Timestamp": ts,
-                        "TransactionType": os.environ.get("MPESA_TRANSACTION_TYPE", "CustomerPayBillOnline"),
-                        "Amount": int(value),
-                        "PartyA": phone,
-                        "PartyB": shortcode,
-                        "PhoneNumber": phone,
-                        "CallBackURL": callback_base + "/mpesa/callback",
-                        "AccountReference": f"TRADEON-{session['user_id']}",
-                        "TransactionDesc": "TRADEON wallet deposit"
-                    }
-                    base = os.environ.get("MPESA_BASE_URL", "https://sandbox.safaricom.co.ke")
-                    r = requests.post(base + "/mpesa/stkpush/v1/processrequest", headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}, json=payload, timeout=30)
-                    data = r.json()
-                    if r.ok and data.get("ResponseCode") == "0":
-                        with sqlite3.connect(DB) as con:
-                            con.execute("INSERT INTO deposits (user_id,amount,phone,merchant_request_id,checkout_request_id,status) VALUES (?,?,?,?,?,?)", (session["user_id"], value, phone, data.get("MerchantRequestID"), data.get("CheckoutRequestID"), "PENDING"))
-                            con.execute("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)", (session["user_id"],))
-                        message = "M-Pesa prompt sent. Check your phone and enter your M-Pesa PIN. Your wallet will only be credited after Safaricom confirms the payment."
+                    with sqlite3.connect(DB) as con:
+                        con.execute(
+                            "INSERT INTO deposits (user_id,amount,phone,merchant_request_id,status,payment_method,payment_reference) VALUES (?,?,?,?,?,?,?)",
+                            (session["user_id"], value, "CO-OP BANK", payment_reference, "PENDING", "COOP_BANK", payment_reference)
+                        )
+                        con.execute("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)", (session["user_id"],))
+                    message = "Your Co-op Bank transfer has been submitted for verification. Your wallet will not be credited until TRADEON verifies the payment."
+            elif payment_method == "MPESA":
+                phone = normalize_phone(request.form.get("phone", "")).replace("+", "")
+                if not (phone.isdigit() and phone.startswith("254") and len(phone) == 12):
+                    error = "Enter a valid Kenyan M-Pesa number."
+                else:
+                    shortcode = os.environ.get("MPESA_SHORTCODE")
+                    passkey = os.environ.get("MPESA_PASSKEY")
+                    callback_base = os.environ.get("MPESA_CALLBACK_BASE_URL", os.environ.get("RENDER_EXTERNAL_URL", "")).rstrip("/")
+                    if not shortcode or not passkey or not callback_base:
+                        error = "M-Pesa integration is not configured on the server yet."
                     else:
-                        error = data.get("errorMessage") or data.get("ResponseDescription") or "Safaricom could not start the payment."
+                        token = daraja_token()
+                        ts = mpesa_timestamp()
+                        payload = {
+                            "BusinessShortCode": shortcode,
+                            "Password": mpesa_password(shortcode, passkey, ts),
+                            "Timestamp": ts,
+                            "TransactionType": os.environ.get("MPESA_TRANSACTION_TYPE", "CustomerPayBillOnline"),
+                            "Amount": int(value),
+                            "PartyA": phone,
+                            "PartyB": shortcode,
+                            "PhoneNumber": phone,
+                            "CallBackURL": callback_base + "/mpesa/callback",
+                            "AccountReference": f"TRADEON-{session['user_id']}",
+                            "TransactionDesc": "TRADEON wallet deposit"
+                        }
+                        base = os.environ.get("MPESA_BASE_URL", "https://sandbox.safaricom.co.ke")
+                        r = requests.post(base + "/mpesa/stkpush/v1/processrequest", headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}, json=payload, timeout=30)
+                        data = r.json()
+                        if r.ok and data.get("ResponseCode") == "0":
+                            with sqlite3.connect(DB) as con:
+                                con.execute("INSERT INTO deposits (user_id,amount,phone,merchant_request_id,checkout_request_id,status,payment_method) VALUES (?,?,?,?,?,?,?)", (session["user_id"], value, phone, data.get("MerchantRequestID"), data.get("CheckoutRequestID"), "PENDING", "MPESA"))
+                                con.execute("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)", (session["user_id"],))
+                            message = "M-Pesa prompt sent. Check your phone and enter your M-Pesa PIN. Your wallet will only be credited after Safaricom confirms the payment."
+                        else:
+                            error = data.get("errorMessage") or data.get("ResponseDescription") or "Safaricom could not start the payment."
+            else:
+                error = "Choose a supported payment method."
         except (ValueError, requests.RequestException, RuntimeError, KeyError):
-            error = "Unable to start the M-Pesa payment. Check the server configuration and try again."
-    return render_template("deposit.html", error=error, message=message, amount=amount)
+            error = "Unable to start the deposit. Check the details and try again."
+    return render_template(
+        "deposit.html", error=error, message=message, amount=amount,
+        payment_method=payment_method, payment_reference=payment_reference,
+        coop_account_name=coop_account_name, coop_account_number=coop_account_number,
+        coop_branch=coop_branch
+    )
 
 @app.route("/mpesa/callback", methods=["POST"])
 def mpesa_callback():
@@ -986,15 +1018,16 @@ def manager_dashboard():
         pending = con.execute("SELECT COUNT(*) FROM deposits WHERE status='PENDING'").fetchone()[0]
         successful = con.execute("SELECT COALESCE(SUM(amount),0) FROM deposits WHERE status='SUCCESS'").fetchone()[0]
         deposits = con.execute("""
-            SELECT d.id, u.name, d.phone, d.amount, d.status, d.mpesa_receipt, d.created_at
+            SELECT d.id, u.name, d.phone, d.amount, d.status, d.mpesa_receipt, d.created_at,
+                   d.payment_method, d.payment_reference
             FROM deposits d JOIN users u ON u.id=d.user_id
             ORDER BY d.id DESC LIMIT 50
         """).fetchall()
     rows = "".join(
-        f"<tr><td>{d[0]}</td><td>{d[1]}</td><td>{d[2]}</td><td>KSh {d[3]:,.2f}</td><td>{d[4]}</td><td>{d[5] or '-'}</td><td>{d[6]}</td></tr>"
+        f"<tr><td>{d[0]}</td><td>{d[1]}</td><td>{d[7] or 'MPESA'}</td><td>{d[2]}</td><td>KSh {d[3]:,.2f}</td><td>{d[8] or d[5] or '-'}</td><td>{d[4]}</td><td>{d[6]}</td></tr>"
         for d in deposits
     )
-    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Manager</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa;color:#111}}header{{background:#111;color:white;padding:18px 5%;display:flex;justify-content:space-between}}main{{padding:24px 5%}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}}.card{{background:white;padding:18px;border-radius:12px;box-shadow:0 2px 10px #0001}}table{{width:100%;border-collapse:collapse;background:white;margin-top:20px;font-size:13px}}th,td{{padding:10px;border-bottom:1px solid #eee;text-align:left}}.tablewrap{{overflow:auto}}a{{color:white}}</style></head><body><header><b>TRADEON MANAGER</b><a href="/manager/logout">Logout</a></header><main><p><a href="/manager/users" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">👥 Manage Users</a></p><p><a href="/manager/wallets" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">💰 Manage Balances & Blocking</a></p><p><a href="/manager/signals" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">📈 Create & Manage Signals</a></p><p><a href="/manager/settings" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">⚙️ Demo Trading Settings</a></p><p><a href="/manager/backup/monthly" style="display:inline-block;background:#0b6b3a;color:white;padding:12px 14px;border-radius:8px;text-decoration:none;font-weight:bold">⬇️ Download Monthly Data Backup (ZIP)</a></p><p style="font-size:13px;color:#555">Downloads a complete snapshot of all database tables as CSV files in a ZIP archive. Download and store it safely every month.</p><h2>Dashboard</h2><div class="cards"><div class="card"><b>Users</b><h2>{users}</h2></div><div class="card"><b>Verified</b><h2>{verified}</h2></div><div class="card"><b>Pending deposits</b><h2>{pending}</h2></div><div class="card"><b>Successful deposits</b><h2>KSh {successful:,.2f}</h2></div></div><h2>Recent deposits</h2><div class="tablewrap"><table><tr><th>ID</th><th>User</th><th>Phone</th><th>Amount</th><th>Status</th><th>Receipt</th><th>Date</th></tr>{rows or "<tr><td colspan='7'>No deposits yet.</td></tr>"}</table></div></main></body></html>"""
+    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Manager</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa;color:#111}}header{{background:#111;color:white;padding:18px 5%;display:flex;justify-content:space-between}}main{{padding:24px 5%}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}}.card{{background:white;padding:18px;border-radius:12px;box-shadow:0 2px 10px #0001}}table{{width:100%;border-collapse:collapse;background:white;margin-top:20px;font-size:13px}}th,td{{padding:10px;border-bottom:1px solid #eee;text-align:left}}.tablewrap{{overflow:auto}}a{{color:white}}</style></head><body><header><b>TRADEON MANAGER</b><a href="/manager/logout">Logout</a></header><main><p><a href="/manager/users" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">👥 Manage Users</a></p><p><a href="/manager/wallets" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">💰 Manage Balances & Blocking</a></p><p><a href="/manager/signals" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">📈 Create & Manage Signals</a></p><p><a href="/manager/settings" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">⚙️ Demo Trading Settings</a></p><p><a href="/manager/backup/monthly" style="display:inline-block;background:#0b6b3a;color:white;padding:12px 14px;border-radius:8px;text-decoration:none;font-weight:bold">⬇️ Download Monthly Data Backup (ZIP)</a></p><p style="font-size:13px;color:#555">Downloads a complete snapshot of all database tables as CSV files in a ZIP archive. Download and store it safely every month.</p><h2>Dashboard</h2><div class="cards"><div class="card"><b>Users</b><h2>{users}</h2></div><div class="card"><b>Verified</b><h2>{verified}</h2></div><div class="card"><b>Pending deposits</b><h2>{pending}</h2></div><div class="card"><b>Successful deposits</b><h2>KSh {successful:,.2f}</h2></div></div><h2>Recent deposits</h2><div class="tablewrap"><table><tr><th>ID</th><th>User</th><th>Method</th><th>Phone</th><th>Amount</th><th>Reference / Receipt</th><th>Status</th><th>Date</th></tr>{rows or "<tr><td colspan='8'>No deposits yet.</td></tr>"}</table></div></main></body></html>"""
 
 
 @app.route("/manager/wallets", methods=["GET", "POST"])
