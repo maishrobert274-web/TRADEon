@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3, os, requests, base64
+from db import db_connect, DBIntegrityError
 import csv, io, zipfile
 from datetime import datetime
 
@@ -9,7 +10,7 @@ app.secret_key = os.environ.get("SECRET_KEY", "tradeon-demo-secret-change-later"
 DB = "tradeon.db"
 
 def init_db():
-    with sqlite3.connect(DB) as con:
+    with db_connect() as con:
         con.execute("""CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -102,7 +103,7 @@ def register():
                 session["user_id"] = user[0]
                 session["user_name"] = user[1]
                 return redirect(url_for("home"))
-            except sqlite3.IntegrityError:
+            except DBIntegrityError:
                 error = "That phone number is already registered."
     return render_template("register.html", error=error)
 
