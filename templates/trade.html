@@ -143,9 +143,14 @@ function refreshTradePriceLines(trades){
  tradePriceLines=[];
  (trades||[]).forEach(tr=>{
   const price=Number(tr.entry_price);if(!(price>0))return;
-  const isBuy=String(tr.side||'').toUpperCase()==='BUY'||String(tr.side||'').toUpperCase()==='UP';
+  const side=String(tr.side||'').toUpperCase();
+  const isBuy=side==='BUY'||side==='UP';
+  const labelSide=isBuy?'BUY':'SELL';
   const color=isBuy?'#20c997':'#ff5b62';
-  try{tradePriceLines.push(tvSeries.createPriceLine({price,color,lineWidth:2,lineStyle:window.LightweightCharts.LineStyle.Solid,axisLabelVisible:true,title:(isBuy?'BUY':'SELL')+' #'+tr.id+' · '+fmt(price)}))}catch(e){}
+  const amount=Number(tr.amount||0);
+  const placed=tr.created_at?String(tr.created_at).replace('T',' ').slice(0,19):'time unavailable';
+  const title=labelSide+' #'+tr.id+' · '+fmt(amount)+' KSh · '+placed+' · Entry '+fmt(price);
+  try{tradePriceLines.push(tvSeries.createPriceLine({price,color,lineWidth:2,lineStyle:window.LightweightCharts.LineStyle.Solid,axisLabelVisible:true,title}))}catch(e){}
  });
 }
 function chartRowsFromKlines(rows){
