@@ -46,7 +46,7 @@
 <div class="card">
 <div class="marketbar" id="marketList"><button class="pair active" data-pair="BTC/USDT" data-symbol="BTCUSDT" onclick="choosePair(this)">BTC/USDT</button><button class="pair" data-pair="ETH/USDT" data-symbol="ETHUSDT" onclick="choosePair(this)">ETH/USDT</button><button class="pair" data-pair="SOL/USDT" data-symbol="SOLUSDT" onclick="choosePair(this)">SOL/USDT</button></div>
 <div class="pricehead"><div><div class="symbol" id="symbol">BTC/USDT</div><div class="price" id="price">Loading price…</div></div><div style="text-align:right"><div class="change" id="change">--</div><div class="muted" id="source">Getting market data</div></div></div>
-<div class="chart" style="padding:0;overflow:hidden"><iframe id="tradingViewFrame" title="TradingView live candlestick chart" style="display:block;width:100%;height:100%;min-height:300px;border:0;background:#151a21" loading="eager" allow="clipboard-write; fullscreen" allowfullscreen></iframe></div>
+<div class="chart" style="padding:0;overflow:hidden"><div id="tvChart" role="img" aria-label="TRADEON live candlestick chart" style="width:100%;height:100%;min-height:230px;background:#151a21"></div></div>
 <div class="chartfoot"><span id="chartStatus">Loading market candles…</span><span id="candleCountdown">Candle closes in --:--</span><span id="feedNote">Market feed</span></div>
 <div class="chart-controls"><div class="timeframes"><span style="align-self:center;color:#9aa5b1;font-size:11px;padding:0 5px">CANDLE SIZE</span><button class="selected" data-interval="1m" onclick="setIntervalChoice('1m',this)">1 min</button><button data-interval="5m" onclick="setIntervalChoice('5m',this)">5 min</button><button data-interval="15m" onclick="setIntervalChoice('15m',this)">15 min</button><button data-interval="1h" onclick="setIntervalChoice('1h',this)">1 hour</button></div></div>
 </div>
@@ -80,6 +80,7 @@ async function settleDue(){try{const r=await fetch('/api/trades/settle-due',{met
 function choosePair(button){currentSymbol=button.dataset.symbol;currentPair=button.dataset.pair;document.getElementById('symbol').textContent=currentPair;document.querySelectorAll('.pair').forEach(b=>b.classList.toggle('active',b===button));liveShortCandles=[];liveCandle=null;shortChartReady=false;loadPrice();loadChart();connectLiveKline()}
 async function loadPrice(){const p=document.getElementById('price'),ch=document.getElementById('change'),src=document.getElementById('source');try{const r=await fetch('/api/market?symbol='+encodeURIComponent(currentSymbol));const d=await r.json();if(!r.ok)throw Error(d.error||'unavailable');lastLivePrice=Number(d.price)||lastLivePrice;p.textContent=fmt(d.price);ch.textContent=(d.change_percent>=0?'+':'')+Number(d.change_percent).toFixed(2)+'%';ch.style.color=d.change_percent>=0?'#27d99a':'#ff6b6b';src.textContent='Source: '+(d.source||'market data')}catch(e){p.textContent='Price unavailable';ch.textContent='--';src.textContent='Market feed temporarily unavailable'}}
 let chartType='candles', chartInterval='1m', tvChart=null, tvSeries=null, tvResizeObserver=null, chartBusy=false, liveCandle=null, liveShortCandles=[], shortChartReady=false, tradePriceLines=[];
+let customCandles=[], chartLoadToken=0, lastCustomDraw=0;
 document.querySelectorAll('.chart-types button').forEach(b=>b.classList.toggle('selected',b.dataset.chart==='candles'));
 function initTvChart(){
  const host=document.getElementById('tvChart');
@@ -109,20 +110,24 @@ function updateCandleClock(){const el=document.getElementById('candleCountdown')
 function intervalSeconds(){return ({'5s':5,'15s':15,'30s':30,'1m':60,'5m':300,'15m':900,'1h':3600,'4h':14400,'1d':86400})[chartInterval]||60}
 function isShortInterval(){return ['5s','15s','30s'].includes(chartInterval)}
 function updateLiveCandle(price,eventMs){
- if(!tvSeries||!(price>0))return;
+ if(!(price>0))return;
  const step=intervalSeconds(),bucket=Math.floor(eventMs/1000/step)*step;
- if(isShortInterval()){candleCloseAt=(bucket+step)*1000;updateCandleClock();document.getElementById('chartStatus').textContent='Live candle updating · '+chartInterval;
-  let candle=liveShortCandles.length?liveShortCandles[liveShortCandles.length-1]:null;
-  if(!candle||candle.time!==bucket){candle={time:bucket,open:price,high:price,low:price,close:price};liveShortCandles.push(candle);if(liveShortCandles.length>180)liveShortCandles.shift();}
-  else{candle.high=Math.max(candle.high,price);candle.low=Math.min(candle.low,price);candle.close=price;}
-  liveCandle=candle;
-  const rows=(chartType==='line'||chartType==='area')?liveShortCandles.map(x=>({time:x.time,value:x.close})):liveShortCandles;
-  try{tvSeries.setData(rows);tvChart.timeScale().scrollToRealTime()}catch(e){}
+ candleCloseAt=(bucket+step)*1000;updateCandleClock();
+ let candle=customCandles.length?customCandles[customCandles.length-1]:null;
+ if(!candle||candle.time!==bucket){
+  candle={time:bucket,open:price,high:price,low:price,close:price};
+  customCandles.push(candle);
+  if(customCandles.length>180)customCandles.shift();
  }else{
-  if(!liveCandle||liveCandle.time!==bucket){liveCandle={time:bucket,open:price,high:price,low:price,close:price};}
-  else{liveCandle={time:bucket,open:liveCandle.open,high:Math.max(liveCandle.high,price),low:Math.min(liveCandle.low,price),close:price};}
-  try{if(chartType==='line'||chartType==='area')tvSeries.update({time:bucket,value:price});else tvSeries.update(liveCandle)}catch(e){}
+  candle.high=Math.max(candle.high,price);
+  candle.low=Math.min(candle.low,price);
+  candle.close=price;
  }
+ liveCandle=candle;
+ const now=Date.now();
+ if(now-lastCustomDraw>350){lastCustomDraw=now;renderFallbackChart(customCandles);}
+ const status=document.getElementById('chartStatus');
+ if(status)status.textContent='Your TRADEON chart · live candles · '+chartInterval;
 }
 function connectLiveKline(){
  if(liveTradeSocket){try{liveTradeSocket.onclose=null;liveTradeSocket.close()}catch(e){}liveTradeSocket=null}
@@ -136,22 +141,7 @@ function connectLiveKline(){
 }
 
 let lastChartViewKey='';
-function refreshTradePriceLines(trades){
- if(!tvSeries||!window.LightweightCharts)return;
- for(const line of tradePriceLines){try{tvSeries.removePriceLine(line)}catch(e){}}
- tradePriceLines=[];
- (trades||[]).forEach(tr=>{
-  const price=Number(tr.entry_price);if(!(price>0))return;
-  const side=String(tr.side||'').toUpperCase();
-  const isBuy=side==='BUY'||side==='UP';
-  const labelSide=isBuy?'BUY':'SELL';
-  const color=isBuy?'#20c997':'#ff5b62';
-  const amount=Number(tr.amount||0);
-  const placed=tr.created_at?String(tr.created_at).replace('T',' ').slice(0,19):'time unavailable';
-  const title=labelSide+' #'+tr.id+' ·  '+placed+' · Entry '+fmt(price);
-  try{tradePriceLines.push(tvSeries.createPriceLine({price,color,lineWidth:2,lineStyle:window.LightweightCharts.LineStyle.Solid,axisLabelVisible:true,title}))}catch(e){}
- });
-}
+function refreshTradePriceLines(trades){ /* Trade labels are kept in the open-positions list below the chart. */ }
 function chartRowsFromKlines(rows){
  return rows.map(k=>({time:Math.floor(Number(k[0])/1000),open:Number(k[1]),high:Number(k[2]),low:Number(k[3]),close:Number(k[4])})).filter(k=>k.time&&k.open>0&&k.high>0&&k.low>0&&k.close>0);
 }
@@ -159,27 +149,42 @@ function renderFallbackChart(rows){
  const host=document.getElementById('tvChart');if(!host||!rows||!rows.length)return;
  const width=Math.max(280,host.clientWidth||320),height=Math.max(220,host.clientHeight||260);
  const data=rows.slice(-90),left=8,right=62,top=12,bottom=24,plotW=width-left-right,plotH=height-top-bottom;
- const hi=Math.max(...data.map(x=>x.high)),lo=Math.min(...data.map(x=>x.low)),range=(hi-lo)||1;
+ const hi=Math.max(...data.map(x=>x.high)),lo=Math.min(...data.map(x=>x.low)),range=(hi-lo)||Math.max(1,hi*0.0005);
  const y=v=>top+(hi-v)/range*plotH,step=plotW/data.length,cw=Math.max(2,Math.min(9,step*.62));
  let svg='<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" style="display:block;background:#151a21">';
  for(let j=0;j<5;j++){const yy=top+j*plotH/4,price=hi-j*range/4;svg+='<line x1="'+left+'" y1="'+yy+'" x2="'+(width-right+2)+'" y2="'+yy+'" stroke="#29313a" stroke-width="1"/><text x="'+(width-right+5)+'" y="'+(yy+4)+'" fill="#aab5c1" font-size="10">'+price.toLocaleString('en-US',{maximumFractionDigits:2})+'</text>'}
  data.forEach((c,i)=>{const x=left+i*step+step/2,up=c.close>=c.open,color=up?'#20c997':'#ff5b62',yo=y(c.open),yc=y(c.close),body=Math.max(1,Math.abs(yc-yo));svg+='<line x1="'+x+'" y1="'+y(c.high)+'" x2="'+x+'" y2="'+y(c.low)+'" stroke="'+color+'" stroke-width="1.2"/><rect x="'+(x-cw/2)+'" y="'+Math.min(yo,yc)+'" width="'+cw+'" height="'+body+'" fill="'+color+'"/>'});
- const last=data[data.length-1],py=y(last.close);svg+='<line x1="'+left+'" y1="'+py+'" x2="'+(width-right+2)+'" y2="'+py+'" stroke="#f0c674" stroke-dasharray="3 3"/><text x="'+left+'" y="'+(height-6)+'" fill="#aab5c1" font-size="10">Recent market candles · '+chartInterval+'</text></svg>';
+ const last=data[data.length-1],py=y(last.close);svg+='<line x1="'+left+'" y1="'+py+'" x2="'+(width-right+2)+'" y2="'+py+'" stroke="#f0c674" stroke-dasharray="3 3"/><text x="'+left+'" y="'+(height-6)+'" fill="#aab5c1" font-size="10">TRADEON · '+chartInterval+' · Binance</text></svg>';
  host.innerHTML=svg;
 }
-function tradingViewInterval(){return ({'1m':'1','5m':'5','15m':'15','1h':'60','4h':'240','1d':'D'})[chartInterval]||'1'}
-function tradingViewInterval(){return ({'1m':'1','5m':'5','15m':'15','1h':'60','4h':'240','1d':'D'})[chartInterval]||'1'}
-function loadChart(){
- const frame=document.getElementById('tradingViewFrame');if(!frame)return;
+async function loadChart(){
+ const token=++chartLoadToken;
+ const host=document.getElementById('tvChart');
  const status=document.getElementById('chartStatus'),note=document.getElementById('feedNote');
- const symbol='BINANCE:'+currentSymbol;
- const params=new URLSearchParams({symbol,interval:tradingViewInterval(),theme:'dark',style:'1',locale:'en',toolbarbg:'151a21',timezone:'Etc/UTC',withdateranges:'1',hide_side_toolbar:'0',symboledit:'1',allow_symbol_change:'1',saveimage:'0',details:'0',hotlist:'0',calendar:'0',hideideas:'1',support_host:'https://www.tradingview.com'});
- const next='https://www.tradingview.com/widgetembed/?'+params.toString();
- if(frame.dataset.chartUrl!==next){frame.dataset.chartUrl=next;frame.src=next;}
- if(status)status.textContent='TradingView chart · '+currentPair+' · '+chartInterval;
- if(note)note.textContent='TradingView · live market chart';
+ if(!host)return;
+ if(status)status.textContent='Loading Binance candles…';
+ if(note)note.textContent='TRADEON custom chart · Binance market data';
+ const interval=({'1m':'1m','5m':'5m','15m':'15m','1h':'1h','4h':'4h','1d':'1d'})[chartInterval]||'1m';
+ try{
+  const url='https://api.binance.com/api/v3/klines?symbol='+encodeURIComponent(currentSymbol)+'&interval='+interval+'&limit=100';
+  const response=await fetch(url,{cache:'no-store'});
+  if(!response.ok)throw new Error('Binance candles unavailable ('+response.status+')');
+  const rows=chartRowsFromKlines(await response.json());
+  if(token!==chartLoadToken)return;
+  if(!rows.length)throw new Error('No candle data returned');
+  customCandles=rows;
+  liveCandle=customCandles[customCandles.length-1];
+  candleCloseAt=(liveCandle.time+intervalSeconds())*1000;
+  renderFallbackChart(customCandles);
+  updateCandleClock();
+  if(status)status.textContent='TRADEON custom candlestick chart · '+currentPair+' · '+chartInterval;
+  if(note)note.textContent='Live Binance data · chart built by TRADEON';
+ }catch(e){
+  if(token!==chartLoadToken)return;
+  if(status)status.textContent='Chart data unavailable — reconnecting…';
+  if(note)note.textContent='Binance chart feed unavailable';
+ }
 }
-
 async function loadOpenPositions(){
  const list=document.getElementById('openPositionsList');if(!list)return;
  try{
@@ -216,6 +221,6 @@ async function placeTrade(side){
  }catch(e){status.textContent=e.message||'Could not record demo order.'}
  finally{orderPending=false;buttons.forEach(b=>{b.disabled=false;b.style.opacity='1'})}
 }
-loadPrice();setTimeout(loadChart,250);setTimeout(connectLiveKline,500);loadOpenPositions();if(!candleClockTimer)candleClockTimer=setInterval(updateCandleClock,250);setInterval(settleDue,2000);setInterval(loadPrice,2000);setInterval(loadOpenPositions,10000);window.addEventListener('resize',()=>{if(tvChart){const host=document.getElementById('tvChart');tvChart.applyOptions({width:Math.max(280,host.clientWidth),height:Math.max(260,host.clientHeight)})}});
+loadPrice();setTimeout(loadChart,250);setTimeout(connectLiveKline,500);loadOpenPositions();if(!candleClockTimer)candleClockTimer=setInterval(updateCandleClock,250);setInterval(settleDue,2000);setInterval(loadPrice,2000);setInterval(loadOpenPositions,10000);window.addEventListener('resize',()=>{if(customCandles.length)renderFallbackChart(customCandles)});
 </script>
 </body></html>
