@@ -238,7 +238,7 @@ def api_trade():
     symbols = {"BTC/USDT": "BTCUSDT", "ETH/USDT": "ETHUSDT", "SOL/USDT": "SOLUSDT"}
     allowed_sides = ("UP", "DOWN") if mode == "DURATION" else ("BUY", "SELL")
     if pair not in symbols or side not in allowed_sides or amount < 10 or mode not in ("SPOT", "DURATION"):
-        return {"error": "Invalid demo trade details. Minimum is KSh 10."}, 400
+        return {"error": "Invalid trade details. Minimum amount is $10 USD."}, 400
     if mode == "DURATION" and duration not in (15, 30, 60, 300, 900):
         return {"error": "Choose a supported demo duration."}, 400
     try:
@@ -256,7 +256,7 @@ def api_trade():
         con.execute("INSERT OR IGNORE INTO demo_wallets (user_id,balance) VALUES (?,10000)", (session["user_id"],))
         balance = con.execute("SELECT balance FROM demo_wallets WHERE user_id=?", (session["user_id"],)).fetchone()[0]
         if amount > balance:
-            return {"error": "Insufficient demo balance. Available: KSh %.2f" % balance}, 400
+            return {"error": "Insufficient demo balance. Available: $%.2f USD" % balance}, 400
         con.execute("UPDATE demo_wallets SET balance=balance-? WHERE user_id=?", (amount, session["user_id"]))
         cur = con.execute("INSERT INTO trades (user_id,pair,side,amount,entry_price,status,mode,duration_seconds,expires_at) VALUES (?,?,?,?,?,'OPEN',?,?,CASE WHEN ? > 0 THEN datetime('now', '+' || ? || ' seconds') ELSE NULL END)", (session["user_id"], pair, db_side, amount, price, mode, duration if mode == "DURATION" else None, duration if mode == "DURATION" else 0, duration if mode == "DURATION" else 0))
         trade_id = cur.lastrowid
