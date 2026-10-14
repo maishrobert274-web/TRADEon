@@ -135,7 +135,7 @@ function connectLiveKline(){
  try{
   const ts=new WebSocket('wss://stream.binance.com:9443/ws/'+currentSymbol.toLowerCase()+'@trade');liveTradeSocket=ts;
   ts.onmessage=(ev)=>{if(liveTradeSocket!==ts)return;try{const d=JSON.parse(ev.data),price=Number(d.p);if(price>0){lastLivePrice=price;document.getElementById('price').textContent=fmt(price);document.getElementById('source').textContent='Live Binance trade price';updateLiveCandle(price,Number(d.T)||Date.now());}}catch(e){}};
-  ts.onopen=()=>{if(liveTradeSocket===ts)document.getElementById('feedNote').textContent='TradingView chart · live Binance price feed';};
+  ts.onopen=()=>{if(liveTradeSocket===ts)document.getElementById('feedNote').textContent='TRADEON custom chart · live Binance price feed';};
   ts.onerror=()=>{if(liveTradeSocket===ts)document.getElementById('feedNote').textContent='Live price feed reconnecting…'};
  }catch(e){document.getElementById('feedNote').textContent='Live price feed unavailable'}
 }
