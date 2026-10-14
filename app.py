@@ -82,13 +82,15 @@ class _PostgresConnection:
             ignored = bool(re.match(r'\s*INSERT\s+OR\s+IGNORE\s+INTO\b', sql, re.I))
             if ignored:
                 sql = re.sub(r'\bINSERT\s+OR\s+IGNORE\s+INTO\b', 'INSERT INTO', sql, count=1, flags=re.I)
+            # PostgreSQL requires single quotes for SQL string defaults.
+            sql = re.sub(r'\bDEFAULT\s+"([^"]*)"', lambda m: "DEFAULT '" + m.group(1).replace("'", "''") + "'", sql, flags=re.I)
             sql = sql.replace("?", "%s")
+            if ignored and not re.search(r'\bON\s+CONFLICT\b', sql, re.I):
+                sql = sql.rstrip().rstrip(";") + " ON CONFLICT DO NOTHING"
             # For the two inserts whose IDs are immediately used by the app.
             needs_id = bool(re.match(r'\s*INSERT\s+INTO\s+(users|trades)\b', sql, re.I))
             if needs_id and not re.search(r'\bRETURNING\b', sql, re.I):
                 sql = sql.rstrip().rstrip(";") + " RETURNING id"
-            if ignored and not re.search(r'\bON\s+CONFLICT\b', sql, re.I):
-                sql = sql.rstrip().rstrip(";") + " ON CONFLICT DO NOTHING"
         return sql, params, original
 
     def execute(self, sql, params=()):
