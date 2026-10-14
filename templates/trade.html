@@ -190,7 +190,7 @@ async function loadOpenPositions(){
  try{
   const r=await fetch('/api/trades/open',{cache:'no-store'});const d=await r.json();if(!r.ok)throw Error(d.error||'Could not load trades');
   if(!d.trades||!d.trades.length){list.innerHTML='<div class="position-empty">No open trades. New demo positions will appear here.</div>';refreshTradePriceLines([]);return}
-  list.innerHTML=d.trades.map(tr=>'<div class="position-row"><div><strong>#'+tr.id+' · '+tr.pair+' · '+tr.side+'</strong><div class="position-meta">Amount +' · Entry '+fmt(tr.entry_price)+' · '+tr.mode+'</div></div><button class="close-position" onclick="closeOpenTrade('+tr.id+',this)">CLOSE</button></div>').join('');refreshTradePriceLines(d.trades);
+  list.innerHTML=d.trades.map(tr=>`<div class="position-row"><div><strong>#${tr.id} · ${tr.pair} · ${tr.side}</strong><div class="position-meta">Amount $${fmt(tr.amount)} · Entry ${fmt(tr.entry_price)} · ${tr.mode}</div></div><button class="close-position" onclick="closeOpenTrade(${tr.id},this)">CLOSE</button></div>`).join('');refreshTradePriceLines(d.trades);
  }catch(e){list.innerHTML='<div class="position-empty">Could not load open trades. Try refreshing.</div>'}
 }
 
