@@ -195,14 +195,14 @@ async function closeOpenTrade(id,button){
  try{
   const r=await fetch('/api/trades/'+id+'/close',{method:'POST'});const d=await r.json();if(!r.ok)throw Error(d.error||'Trade could not be closed');
   note.textContent='Trade #'+id+' closed. Demo P/L: $'+Number(d.pnl).toFixed(2)+'.';
-  document.getElementById('balance').textContent=Number(d.balance).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('balance').textContent=Number(d.balance).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   await loadOpenPositions();
  }catch(e){note.textContent=e.message||'Could not close trade.';button.disabled=false;button.textContent='RETRY'}
 }
 async function placeTrade(side){
  if(orderPending)return;
  const amount=Number(document.getElementById('amount').value),status=document.getElementById('tradeStatus');
- if(!Number.isFinite(amount)||amount<10||amount>10000){status.textContent='Enter a demo amount between KSh 10 and KSh 10,000.';return}
+ if(!Number.isFinite(amount)||amount<10||amount>10000){status.textContent='Enter an amount between $10 and $10,000 USD.';return}
  if(!(lastLivePrice>0)){status.textContent='Waiting for a live market price. Please try again in a moment.';return}
  orderPending=true;const buttons=[document.getElementById('upButton'),document.getElementById('downButton')];buttons.forEach(b=>{b.disabled=true;b.style.opacity='.65'});
  status.textContent='Recording demo order…';
@@ -210,180 +210,7 @@ async function placeTrade(side){
   const mode=document.getElementById('orderType').value==='duration'?'DURATION':'SPOT';
   const r=await fetch('/api/trade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pair:currentPair,side,amount,mode,duration_seconds:Number(document.getElementById('tradeDuration').value),entry_price:lastLivePrice})});
   const d=await r.json();if(!r.ok)throw Error(d.error||'Order failed');
-  document.getElementById('balance').textContent=Number(d.balance).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});
-  status.textContent=(d.mode==='DURATION'?'Demo '+side+' #'+d.trade_id+' opened at '+fmt(d.entry_price)+'.':'Demo '+side+' #'+d.trade_id+' recorded at '+fmt(d.entry_price)+'.')+' No real order was placed.';
-  if(d.mode==='DURATION')showCountdown(d.duration_seconds,d.trade_id);
-  loadOpenPositions();
- }catch(e){status.textContent=e.message||'Could not record demo order.'}
- finally{orderPending=false;buttons.forEach(b=>{b.disabled=false;b.style.opacity='1'})}
-}
-loadPrice();setTimeout(loadChart,250);setTimeout(connectLiveKline,500);loadOpenPositions();if(!candleClockTimer)candleClockTimer=setInterval(updateCandleClock,250);setInterval(settleDue,2000);setInterval(loadPrice,2000);setInterval(loadChart,60000);setInterval(loadOpenPositions,10000);window.addEventListener('resize',()=>{if(tvChart){const host=document.getElementById('tvChart');tvChart.applyOptions({width:Math.max(280,host.clientWidth),height:Math.max(260,host.clientHeight)})}});
-</script>
-</body></html>+fmt(amount)+' USD · '+placed+' · Entry '+fmt(price);
-  try{tradePriceLines.push(tvSeries.createPriceLine({price,color,lineWidth:2,lineStyle:window.LightweightCharts.LineStyle.Solid,axisLabelVisible:true,title}))}catch(e){}
- });
-}
-function chartRowsFromKlines(rows){
- return rows.map(k=>({time:Math.floor(Number(k[0])/1000),open:Number(k[1]),high:Number(k[2]),low:Number(k[3]),close:Number(k[4])})).filter(k=>k.time&&k.open>0&&k.high>0&&k.low>0&&k.close>0);
-}
-async function loadChart(){
- if(chartBusy)return;
- if(!initTvChart())return;
- chartBusy=true;
- const status=document.getElementById('chartStatus'),note=document.getElementById('feedNote');
- try{
-  const url='https://api.binance.com/api/v3/klines?symbol='+encodeURIComponent(currentSymbol)+'&interval='+encodeURIComponent(chartInterval)+'&limit=240';
-  const response=await fetchChartWithTimeout(url,9000);
-  if(!response.ok)throw Error('Market candle request failed');
-  const rows=chartRowsFromKlines(await response.json());
-  if(!rows.length)throw Error('No market candles returned');
-  liveShortCandles=rows.slice();liveCandle=rows[rows.length-1];
-  const chartData=(chartType==='line'||chartType==='area')?rows.map(k=>({time:k.time,value:k.close})):rows;
-  tvSeries.setData(chartData);
-  tvChart.timeScale().fitContent();
-  candleCloseAt=(rows[rows.length-1].time+intervalSeconds())*1000;updateCandleClock();
-  if(status)status.textContent='Live Binance candlesticks · '+currentPair+' · '+chartInterval;
-  if(note)note.textContent='Live market · demo trade lines';
-  try{const tr=await fetch('/api/trades/open',{cache:'no-store'});if(tr.ok){const data=await tr.json();refreshTradePriceLines(data.trades||[]);}}catch(e){}
- }catch(e){
-  if(status)status.textContent='Market candles unavailable. Check connection and refresh.';
-  if(note)note.textContent='Waiting for live market candles';
- }finally{chartBusy=false}
-}
-
-async function loadOpenPositions(){
- const list=document.getElementById('openPositionsList');if(!list)return;
- try{
-  const r=await fetch('/api/trades/open',{cache:'no-store'});const d=await r.json();if(!r.ok)throw Error(d.error||'Could not load trades');
-  if(!d.trades||!d.trades.length){list.innerHTML='<div class="position-empty">No open trades. New demo positions will appear here.</div>';refreshTradePriceLines([]);return}
-  list.innerHTML=d.trades.map(tr=>'<div class="position-row"><div><strong>#'+tr.id+' · '+tr.pair+' · '+tr.side+'</strong><div class="position-meta">Amount KSh '+Number(tr.amount).toFixed(2)+' · Entry '+fmt(tr.entry_price)+' · '+tr.mode+'</div></div><button class="close-position" onclick="closeOpenTrade('+tr.id+',this)">CLOSE</button></div>').join('');refreshTradePriceLines(d.trades);
- }catch(e){list.innerHTML='<div class="position-empty">Could not load open trades. Try refreshing.</div>'}
-}
-
-async function closeOpenTrade(id,button){
- const note=document.getElementById('closeTradeNotice');button.disabled=true;button.textContent='Closing…';note.textContent='Closing demo trade at the latest available market price…';
- try{
-  const r=await fetch('/api/trades/'+id+'/close',{method:'POST'});const d=await r.json();if(!r.ok)throw Error(d.error||'Trade could not be closed');
-  note.textContent='Trade #'+id+' closed. Demo P/L: KSh '+Number(d.pnl).toFixed(2)+'.';
-  document.getElementById('balance').textContent=Number(d.balance).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});
-  await loadOpenPositions();
- }catch(e){note.textContent=e.message||'Could not close trade.';button.disabled=false;button.textContent='RETRY'}
-}
-async function placeTrade(side){
- if(orderPending)return;
- const amount=Number(document.getElementById('amount').value),status=document.getElementById('tradeStatus');
- if(!Number.isFinite(amount)||amount<10||amount>10000){status.textContent='Enter a demo amount between KSh 10 and KSh 10,000.';return}
- if(!(lastLivePrice>0)){status.textContent='Waiting for a live market price. Please try again in a moment.';return}
- orderPending=true;const buttons=[document.getElementById('upButton'),document.getElementById('downButton')];buttons.forEach(b=>{b.disabled=true;b.style.opacity='.65'});
- status.textContent='Recording demo order…';
- try{
-  const mode=document.getElementById('orderType').value==='duration'?'DURATION':'SPOT';
-  const r=await fetch('/api/trade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pair:currentPair,side,amount,mode,duration_seconds:Number(document.getElementById('tradeDuration').value),entry_price:lastLivePrice})});
-  const d=await r.json();if(!r.ok)throw Error(d.error||'Order failed');
-  document.getElementById('balance').textContent=Number(d.balance).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});
-  status.textContent=(d.mode==='DURATION'?'Demo '+side+' #'+d.trade_id+' opened at '+fmt(d.entry_price)+'.':'Demo '+side+' #'+d.trade_id+' recorded at '+fmt(d.entry_price)+'.')+' No real order was placed.';
-  if(d.mode==='DURATION')showCountdown(d.duration_seconds,d.trade_id);
-  loadOpenPositions();
- }catch(e){status.textContent=e.message||'Could not record demo order.'}
- finally{orderPending=false;buttons.forEach(b=>{b.disabled=false;b.style.opacity='1'})}
-}
-loadPrice();setTimeout(loadChart,250);setTimeout(connectLiveKline,500);loadOpenPositions();if(!candleClockTimer)candleClockTimer=setInterval(updateCandleClock,250);setInterval(settleDue,2000);setInterval(loadPrice,2000);setInterval(loadChart,60000);setInterval(loadOpenPositions,10000);window.addEventListener('resize',()=>{if(tvChart){const host=document.getElementById('tvChart');tvChart.applyOptions({width:Math.max(280,host.clientWidth),height:Math.max(260,host.clientHeight)})}});
-</script>
-</body></html>+Number(tr.amount).toFixed(2)+' USD+' · Entry '+fmt(tr.entry_price)+' · '+tr.mode+'</div></div><button class="close-position" onclick="closeOpenTrade('+tr.id+',this)">CLOSE</button></div>').join('');refreshTradePriceLines(d.trades);
- }catch(e){list.innerHTML='<div class="position-empty">Could not load open trades. Try refreshing.</div>'}
-}
-
-async function closeOpenTrade(id,button){
- const note=document.getElementById('closeTradeNotice');button.disabled=true;button.textContent='Closing…';note.textContent='Closing demo trade at the latest available market price…';
- try{
-  const r=await fetch('/api/trades/'+id+'/close',{method:'POST'});const d=await r.json();if(!r.ok)throw Error(d.error||'Trade could not be closed');
-  note.textContent='Trade #'+id+' closed. Demo P/L: KSh '+Number(d.pnl).toFixed(2)+'.';
-  document.getElementById('balance').textContent=Number(d.balance).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});
-  await loadOpenPositions();
- }catch(e){note.textContent=e.message||'Could not close trade.';button.disabled=false;button.textContent='RETRY'}
-}
-async function placeTrade(side){
- if(orderPending)return;
- const amount=Number(document.getElementById('amount').value),status=document.getElementById('tradeStatus');
- if(!Number.isFinite(amount)||amount<10||amount>10000){status.textContent='Enter a demo amount between KSh 10 and KSh 10,000.';return}
- if(!(lastLivePrice>0)){status.textContent='Waiting for a live market price. Please try again in a moment.';return}
- orderPending=true;const buttons=[document.getElementById('upButton'),document.getElementById('downButton')];buttons.forEach(b=>{b.disabled=true;b.style.opacity='.65'});
- status.textContent='Recording demo order…';
- try{
-  const mode=document.getElementById('orderType').value==='duration'?'DURATION':'SPOT';
-  const r=await fetch('/api/trade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pair:currentPair,side,amount,mode,duration_seconds:Number(document.getElementById('tradeDuration').value),entry_price:lastLivePrice})});
-  const d=await r.json();if(!r.ok)throw Error(d.error||'Order failed');
-  document.getElementById('balance').textContent=Number(d.balance).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});
-  status.textContent=(d.mode==='DURATION'?'Demo '+side+' #'+d.trade_id+' opened at '+fmt(d.entry_price)+'.':'Demo '+side+' #'+d.trade_id+' recorded at '+fmt(d.entry_price)+'.')+' No real order was placed.';
-  if(d.mode==='DURATION')showCountdown(d.duration_seconds,d.trade_id);
-  loadOpenPositions();
- }catch(e){status.textContent=e.message||'Could not record demo order.'}
- finally{orderPending=false;buttons.forEach(b=>{b.disabled=false;b.style.opacity='1'})}
-}
-loadPrice();setTimeout(loadChart,250);setTimeout(connectLiveKline,500);loadOpenPositions();if(!candleClockTimer)candleClockTimer=setInterval(updateCandleClock,250);setInterval(settleDue,2000);setInterval(loadPrice,2000);setInterval(loadChart,60000);setInterval(loadOpenPositions,10000);window.addEventListener('resize',()=>{if(tvChart){const host=document.getElementById('tvChart');tvChart.applyOptions({width:Math.max(280,host.clientWidth),height:Math.max(260,host.clientHeight)})}});
-</script>
-</body></html>+fmt(amount)+' USD · '+placed+' · Entry '+fmt(price);
-  try{tradePriceLines.push(tvSeries.createPriceLine({price,color,lineWidth:2,lineStyle:window.LightweightCharts.LineStyle.Solid,axisLabelVisible:true,title}))}catch(e){}
- });
-}
-function chartRowsFromKlines(rows){
- return rows.map(k=>({time:Math.floor(Number(k[0])/1000),open:Number(k[1]),high:Number(k[2]),low:Number(k[3]),close:Number(k[4])})).filter(k=>k.time&&k.open>0&&k.high>0&&k.low>0&&k.close>0);
-}
-async function loadChart(){
- if(chartBusy)return;
- if(!initTvChart())return;
- chartBusy=true;
- const status=document.getElementById('chartStatus'),note=document.getElementById('feedNote');
- try{
-  const url='https://api.binance.com/api/v3/klines?symbol='+encodeURIComponent(currentSymbol)+'&interval='+encodeURIComponent(chartInterval)+'&limit=240';
-  const response=await fetchChartWithTimeout(url,9000);
-  if(!response.ok)throw Error('Market candle request failed');
-  const rows=chartRowsFromKlines(await response.json());
-  if(!rows.length)throw Error('No market candles returned');
-  liveShortCandles=rows.slice();liveCandle=rows[rows.length-1];
-  const chartData=(chartType==='line'||chartType==='area')?rows.map(k=>({time:k.time,value:k.close})):rows;
-  tvSeries.setData(chartData);
-  tvChart.timeScale().fitContent();
-  candleCloseAt=(rows[rows.length-1].time+intervalSeconds())*1000;updateCandleClock();
-  if(status)status.textContent='Live Binance candlesticks · '+currentPair+' · '+chartInterval;
-  if(note)note.textContent='Live market · demo trade lines';
-  try{const tr=await fetch('/api/trades/open',{cache:'no-store'});if(tr.ok){const data=await tr.json();refreshTradePriceLines(data.trades||[]);}}catch(e){}
- }catch(e){
-  if(status)status.textContent='Market candles unavailable. Check connection and refresh.';
-  if(note)note.textContent='Waiting for live market candles';
- }finally{chartBusy=false}
-}
-
-async function loadOpenPositions(){
- const list=document.getElementById('openPositionsList');if(!list)return;
- try{
-  const r=await fetch('/api/trades/open',{cache:'no-store'});const d=await r.json();if(!r.ok)throw Error(d.error||'Could not load trades');
-  if(!d.trades||!d.trades.length){list.innerHTML='<div class="position-empty">No open trades. New demo positions will appear here.</div>';refreshTradePriceLines([]);return}
-  list.innerHTML=d.trades.map(tr=>'<div class="position-row"><div><strong>#'+tr.id+' · '+tr.pair+' · '+tr.side+'</strong><div class="position-meta">Amount KSh '+Number(tr.amount).toFixed(2)+' · Entry '+fmt(tr.entry_price)+' · '+tr.mode+'</div></div><button class="close-position" onclick="closeOpenTrade('+tr.id+',this)">CLOSE</button></div>').join('');refreshTradePriceLines(d.trades);
- }catch(e){list.innerHTML='<div class="position-empty">Could not load open trades. Try refreshing.</div>'}
-}
-
-async function closeOpenTrade(id,button){
- const note=document.getElementById('closeTradeNotice');button.disabled=true;button.textContent='Closing…';note.textContent='Closing demo trade at the latest available market price…';
- try{
-  const r=await fetch('/api/trades/'+id+'/close',{method:'POST'});const d=await r.json();if(!r.ok)throw Error(d.error||'Trade could not be closed');
-  note.textContent='Trade #'+id+' closed. Demo P/L: KSh '+Number(d.pnl).toFixed(2)+'.';
-  document.getElementById('balance').textContent=Number(d.balance).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});
-  await loadOpenPositions();
- }catch(e){note.textContent=e.message||'Could not close trade.';button.disabled=false;button.textContent='RETRY'}
-}
-async function placeTrade(side){
- if(orderPending)return;
- const amount=Number(document.getElementById('amount').value),status=document.getElementById('tradeStatus');
- if(!Number.isFinite(amount)||amount<10||amount>10000){status.textContent='Enter a demo amount between KSh 10 and KSh 10,000.';return}
- if(!(lastLivePrice>0)){status.textContent='Waiting for a live market price. Please try again in a moment.';return}
- orderPending=true;const buttons=[document.getElementById('upButton'),document.getElementById('downButton')];buttons.forEach(b=>{b.disabled=true;b.style.opacity='.65'});
- status.textContent='Recording demo order…';
- try{
-  const mode=document.getElementById('orderType').value==='duration'?'DURATION':'SPOT';
-  const r=await fetch('/api/trade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pair:currentPair,side,amount,mode,duration_seconds:Number(document.getElementById('tradeDuration').value),entry_price:lastLivePrice})});
-  const d=await r.json();if(!r.ok)throw Error(d.error||'Order failed');
-  document.getElementById('balance').textContent=Number(d.balance).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('balance').textContent=Number(d.balance).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
   status.textContent=(d.mode==='DURATION'?'Demo '+side+' #'+d.trade_id+' opened at '+fmt(d.entry_price)+'.':'Demo '+side+' #'+d.trade_id+' recorded at '+fmt(d.entry_price)+'.')+' No real order was placed.';
   if(d.mode==='DURATION')showCountdown(d.duration_seconds,d.trade_id);
   loadOpenPositions();
