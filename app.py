@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3, os, requests, base64
+from db import db_connect, DBIntegrityError
 import csv, io, zipfile
 from datetime import datetime
 
@@ -9,7 +10,7 @@ app.secret_key = os.environ.get("SECRET_KEY", "tradeon-demo-secret-change-later"
 DB = "tradeon.db"
 
 def init_db():
-    with sqlite3.connect(DB) as con:
+    with db_connect() as con:
         con.execute("""CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -35,7 +36,7 @@ def init_db():
 init_db()
 
 def init_manager_wallet_controls():
-    with sqlite3.connect(DB) as con:
+    with db_connect() as con:
         cols = [r[1] for r in con.execute("PRAGMA table_info(users)").fetchall()]
         if "blocked" not in cols:
             con.execute("ALTER TABLE users ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0")
@@ -87,7 +88,7 @@ def register():
             error = "Enter your phone number with its international country code, for example +254712345678."
         else:
             try:
-                with sqlite3.connect(DB) as con:
+                with db_connect() as con:
                     cur = con.execute(
                         "INSERT INTO users (name,phone,password,verified,country) VALUES (?,?,?,0,?)",
                         (name, phone, generate_password_hash(password), country)
@@ -95,14 +96,14 @@ def register():
                     user_id = cur.lastrowid
                 # Phone verification is disabled for simple registration.
                 # The phone number is used as the account login identifier.
-                with sqlite3.connect(DB) as con:
+                with db_connect() as con:
                     con.execute("UPDATE users SET verified=1 WHERE id=?", (user_id,))
                     con.execute("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)", (user_id,))
                     user = con.execute("SELECT id,name FROM users WHERE id=?", (user_id,)).fetchone()
                 session["user_id"] = user[0]
                 session["user_name"] = user[1]
                 return redirect(url_for("home"))
-            except sqlite3.IntegrityError:
+            except DBIntegrityError:
                 error = "That phone number is already registered."
     return render_template("register.html", error=error)
 
@@ -112,13 +113,13 @@ def login():
     if request.method == "POST":
         phone = normalize_phone(request.form.get("phone", ""))
         password = request.form.get("password", "")
-        with sqlite3.connect(DB) as con:
+        with db_connect() as con:
             user = con.execute(
                 "SELECT id,name,password,verified FROM users WHERE phone=?",
                 (phone,)
             ).fetchone()
         if user and check_password_hash(user[2], password):
-            with sqlite3.connect(DB) as con:
+            with db_connect() as con:
                 blocked_row = con.execute("SELECT blocked FROM users WHERE id=?", (user[0],)).fetchone()
             if blocked_row and blocked_row[0]:
                 return render_template("login.html", error="This account is blocked. Contact TRADEON support.")
@@ -190,7 +191,7 @@ def deposit():
                     r = requests.post(base + "/mpesa/stkpush/v1/processrequest", headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}, json=payload, timeout=30)
                     data = r.json()
                     if r.ok and data.get("ResponseCode") == "0":
-                        with sqlite3.connect(DB) as con:
+                        with db_connect() as con:
                             con.execute("INSERT INTO deposits (user_id,amount,phone,merchant_request_id,checkout_request_id,status) VALUES (?,?,?,?,?,?)", (session["user_id"], value, phone, data.get("MerchantRequestID"), data.get("CheckoutRequestID"), "PENDING"))
                             con.execute("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)", (session["user_id"],))
                         message = "M-Pesa prompt sent. Check your phone and enter your M-Pesa PIN. Your wallet will only be credited after Safaricom confirms the payment."
@@ -211,7 +212,7 @@ def mpesa_callback():
     receipt = meta.get("MpesaReceiptNumber")
     amount = meta.get("Amount")
     if checkout_id:
-        with sqlite3.connect(DB) as con:
+        with db_connect() as con:
             row = con.execute("SELECT id,user_id,amount,status FROM deposits WHERE checkout_request_id=?", (checkout_id,)).fetchone()
             if row and row[3] == "PENDING":
                 if result_code == 0 and receipt and amount is not None and float(amount) == float(row[2]):
@@ -236,7 +237,7 @@ def api_trade():
     except (TypeError, ValueError):
         amount, duration = 0, 0
     if mode == "DURATION" and duration == 0:
-        with sqlite3.connect(DB) as settings_con:
+        with db_connect() as settings_con:
             setting = settings_con.execute("SELECT value FROM app_settings WHERE key='demo_default_duration'").fetchone()
             duration = int(setting[0]) if setting else 15
     symbols = {"BTC/USDT": "BTCUSDT", "ETH/USDT": "ETHUSDT", "SOL/USDT": "SOLUSDT"}
@@ -256,7 +257,7 @@ def api_trade():
     except (requests.RequestException, KeyError, TypeError, ValueError):
         return {"error": "Could not get the current market price. Please retry."}, 503
     db_side = ("BUY" if side == "UP" else "SELL") if mode == "DURATION" else side
-    with sqlite3.connect(DB) as con:
+    with db_connect() as con:
         con.execute("INSERT OR IGNORE INTO demo_wallets (user_id,balance) VALUES (?,10000)", (session["user_id"],))
         balance = con.execute("SELECT balance FROM demo_wallets WHERE user_id=?", (session["user_id"],)).fetchone()[0]
         if amount > balance:
@@ -271,7 +272,7 @@ def api_trade():
 def api_open_trades():
     if "user_id" not in session:
         return {"error": "login required"}, 401
-    with sqlite3.connect(DB) as con:
+    with db_connect() as con:
         rows = con.execute(
             "SELECT id,pair,side,amount,entry_price,mode,created_at FROM trades WHERE user_id=? AND status='OPEN' ORDER BY id DESC LIMIT 50",
             (session["user_id"],)
@@ -287,7 +288,7 @@ def api_close_demo_trade(trade_id):
     if "user_id" not in session:
         return {"error": "Please sign in again."}, 401
     symbols = {"BTC/USDT": "BTCUSDT", "ETH/USDT": "ETHUSDT", "SOL/USDT": "SOLUSDT"}
-    with sqlite3.connect(DB) as con:
+    with db_connect() as con:
         row = con.execute(
             "SELECT pair,side,amount,entry_price,status,mode,expires_at FROM trades WHERE id=? AND user_id=?",
             (trade_id, session["user_id"])
@@ -326,7 +327,7 @@ def api_close_all_demo_trades():
     if "user_id" not in session:
         return {"error": "Please sign in again."}, 401
     symbols = {"BTC/USDT": "BTCUSDT", "ETH/USDT": "ETHUSDT", "SOL/USDT": "SOLUSDT"}
-    with sqlite3.connect(DB) as con:
+    with db_connect() as con:
         rows = con.execute(
             "SELECT id,pair,side,amount,entry_price FROM trades WHERE user_id=? AND status='OPEN' AND mode!='DURATION' ORDER BY id",
             (session["user_id"],)
@@ -370,7 +371,7 @@ def settle_due_demo_trades():
     if "user_id" not in session:
         return {"error": "login required"}, 401
     symbols = {"BTC/USDT": "BTCUSDT", "ETH/USDT": "ETHUSDT", "SOL/USDT": "SOLUSDT"}
-    with sqlite3.connect(DB) as con:
+    with db_connect() as con:
         due = con.execute("SELECT id,pair,side,amount,entry_price FROM trades WHERE user_id=? AND mode='DURATION' AND status='OPEN' AND expires_at<=CURRENT_TIMESTAMP", (session["user_id"],)).fetchall()
         results = []
         for row in due:
@@ -398,7 +399,7 @@ def close_demo_trade(trade_id):
     if "user_id" not in session:
         return redirect(url_for("login"))
     symbols = {"BTC/USDT": "BTCUSDT", "ETH/USDT": "ETHUSDT", "SOL/USDT": "SOLUSDT"}
-    with sqlite3.connect(DB) as con:
+    with db_connect() as con:
         row = con.execute("SELECT pair,side,amount,entry_price,status FROM trades WHERE id=? AND user_id=?", (trade_id, session["user_id"])).fetchone()
         if not row or row[4] != "OPEN" or row[0] not in symbols:
             return redirect(url_for("trades"))
@@ -544,7 +545,7 @@ def market_price():
 @app.route("/signals")
 def signals():
     # Published signals are public; manager drafts remain hidden by active=1.
-    with sqlite3.connect(DB) as con:
+    with db_connect() as con:
         rows = con.execute("""
             SELECT id,pair,action,entry_price,stop_loss,take_profit,strength,note,created_at
             FROM signals WHERE active=1 ORDER BY id DESC LIMIT 50
@@ -678,7 +679,7 @@ def manager_auto_signals():
             f"TEST MODE — automatically generated from Binance 1h EMA(9/21) crossover "
             f"and RSI({momentum:.1f}). Review before publishing; not financial advice."
         )
-        with sqlite3.connect(DB) as con:
+        with db_connect() as con:
             con.execute(
                 """INSERT INTO signals (pair,action,entry_price,stop_loss,take_profit,strength,note,active)
                    VALUES (?,?,?,?,?,?,?,0)""",
@@ -705,14 +706,14 @@ def manager_signals():
         if not pair or action not in ("BUY", "SELL"):
             error = "Enter a pair and choose BUY or SELL."
         else:
-            with sqlite3.connect(DB) as con:
+            with db_connect() as con:
                 con.execute("""INSERT INTO signals
                     (pair,action,entry_price,stop_loss,take_profit,strength,note,active)
                     VALUES (?,?,?,?,?,?,?,1)""",
                     (pair, action, entry, stop_loss, take_profit, strength, note))
             return redirect(url_for("manager_signals"))
 
-    with sqlite3.connect(DB) as con:
+    with db_connect() as con:
         rows = con.execute("""SELECT id,pair,action,entry_price,stop_loss,take_profit,strength,note,created_at,active
                               FROM signals ORDER BY id DESC LIMIT 100""").fetchall()
     items = ""
@@ -746,7 +747,7 @@ def manager_signals():
 def manager_signal_toggle(signal_id):
     if not admin_required():
         return redirect(url_for("manager_login"))
-    with sqlite3.connect(DB) as con:
+    with db_connect() as con:
         con.execute("UPDATE signals SET active=CASE WHEN active=1 THEN 0 ELSE 1 END WHERE id=?", (signal_id,))
     return redirect(url_for("manager_signals"))
 
@@ -754,7 +755,7 @@ def manager_signal_toggle(signal_id):
 def trade():
     if "user_id" not in session:
         return redirect(url_for("login"))
-    with sqlite3.connect(DB) as con:
+    with db_connect() as con:
         con.execute("INSERT OR IGNORE INTO demo_wallets (user_id,balance) VALUES (?,10000)", (session["user_id"],))
         demo_balance = con.execute("SELECT balance FROM demo_wallets WHERE user_id=?", (session["user_id"],)).fetchone()[0]
     return render_template("trade.html", user_name=session.get("user_name"), demo_balance=demo_balance)
@@ -763,7 +764,7 @@ def trade():
 def trades():
     if "user_id" not in session:
         return redirect(url_for("login"))
-    with sqlite3.connect(DB) as con:
+    with db_connect() as con:
         rows = con.execute(
             "SELECT id,pair,side,amount,entry_price,status,pnl,created_at FROM trades WHERE user_id=? ORDER BY id DESC LIMIT 100",
             (session["user_id"],)
@@ -811,7 +812,7 @@ async function closeAllTrades(){{
 def wallet():
     if "user_id" not in session:
         return redirect(url_for("login"))
-    with sqlite3.connect(DB) as con:
+    with db_connect() as con:
         con.execute("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)", (session["user_id"],))
         balance = con.execute("SELECT balance FROM wallets WHERE user_id=?", (session["user_id"],)).fetchone()[0]
         deposits = con.execute(
@@ -842,11 +843,11 @@ def profile():
         if not name or len(name) > 80:
             error = "Enter a name between 1 and 80 characters."
         else:
-            with sqlite3.connect(DB) as con:
+            with db_connect() as con:
                 con.execute("UPDATE users SET name=? WHERE id=?", (name, session["user_id"]))
             session["user_name"] = name
             message = "Profile updated."
-    with sqlite3.connect(DB) as con:
+    with db_connect() as con:
         user = con.execute("SELECT name,phone,country FROM users WHERE id=?", (session["user_id"],)).fetchone()
     # A browser may retain an old login cookie after the server database changes.
     # Handle that stale session gracefully instead of raising a 500 error.
@@ -892,7 +893,7 @@ def manager_users():
     if not admin_required():
         return redirect(url_for("manager_login"))
     q = request.args.get("q", "").strip()
-    with sqlite3.connect(DB) as con:
+    with db_connect() as con:
         like = "%" + q + "%"
         if q:
             users = con.execute("""SELECT u.id,u.name,u.phone,u.verified,COALESCE(w.balance,0),(SELECT COUNT(*) FROM deposits d WHERE d.user_id=u.id),(SELECT COALESCE(SUM(d.amount),0) FROM deposits d WHERE d.user_id=u.id AND d.status='SUCCESS') FROM users u LEFT JOIN wallets w ON w.user_id=u.id WHERE u.name LIKE ? OR u.phone LIKE ? ORDER BY u.id DESC""",(like,like)).fetchall()
@@ -905,7 +906,7 @@ def manager_users():
 def manager_user_detail(user_id):
     if not admin_required():
         return redirect(url_for("manager_login"))
-    with sqlite3.connect(DB) as con:
+    with db_connect() as con:
         user=con.execute("SELECT id,name,phone,verified FROM users WHERE id=?",(user_id,)).fetchone()
         wallet=con.execute("SELECT COALESCE(balance,0) FROM wallets WHERE user_id=?",(user_id,)).fetchone()
         deposits=con.execute("SELECT id,amount,status,mpesa_receipt,created_at FROM deposits WHERE user_id=? ORDER BY id DESC LIMIT 50",(user_id,)).fetchall()
@@ -919,7 +920,7 @@ def manager_settings():
         return redirect(url_for("manager_login"))
     message = ""
     allowed_durations = (15, 30, 60, 300, 900)
-    with sqlite3.connect(DB) as con:
+    with db_connect() as con:
         if request.method == "POST":
             try:
                 win = float(request.form.get("demo_win_percent", "20"))
@@ -945,7 +946,7 @@ def manager_monthly_backup():
     # month in which it was downloaded; CSV files are easy to inspect or restore.
     memory_file = io.BytesIO()
     exported_at = datetime.now()
-    with sqlite3.connect(DB) as con:
+    with db_connect() as con:
         con.row_factory = sqlite3.Row
         tables = con.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
@@ -980,7 +981,7 @@ def manager_monthly_backup():
 def manager_dashboard():
     if not admin_required():
         return redirect(url_for("manager_login"))
-    with sqlite3.connect(DB) as con:
+    with db_connect() as con:
         users = con.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         verified = con.execute("SELECT COUNT(*) FROM users WHERE verified=1").fetchone()[0]
         pending = con.execute("SELECT COUNT(*) FROM deposits WHERE status='PENDING'").fetchone()[0]
@@ -1012,7 +1013,7 @@ def manager_wallets():
                 reason = request.form.get("reason", "").strip()
                 if amount <= 0 or amount > 10000000 or not reason:
                     raise ValueError
-                with sqlite3.connect(DB) as con:
+                with db_connect() as con:
                     user = con.execute("SELECT id FROM users WHERE id=?", (user_id,)).fetchone()
                     if not user:
                         message = "User not found."
@@ -1030,7 +1031,7 @@ def manager_wallets():
                             message = "Balance updated and transaction recorded."
             elif action in ("block", "unblock"):
                 reason = request.form.get("reason", "").strip() or "Blocked by manager"
-                with sqlite3.connect(DB) as con:
+                with db_connect() as con:
                     if action == "block":
                         con.execute("UPDATE users SET blocked=1, block_reason=? WHERE id=?", (reason, user_id))
                         message = "User blocked."
@@ -1042,7 +1043,7 @@ def manager_wallets():
         except (ValueError, TypeError):
             message = "Enter a valid user ID, amount, and reason."
     q = request.args.get("q", "").strip()
-    with sqlite3.connect(DB) as con:
+    with db_connect() as con:
         like = "%" + q + "%"
         users = con.execute("""SELECT u.id,u.name,u.phone,COALESCE(w.balance,0),COALESCE(u.blocked,0),COALESCE(u.block_reason,'')
                                FROM users u LEFT JOIN wallets w ON w.user_id=u.id
