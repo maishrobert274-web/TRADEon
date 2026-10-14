@@ -1,7 +1,8 @@
 from flask import Flask, render_template, request, redirect, url_for, session, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
+from markupsafe import escape
 import sqlite3, os, requests, base64
-import csv, io, zipfile
+import csv, io, zipfile, re
 from datetime import datetime
 
 app = Flask(__name__)
@@ -22,6 +23,9 @@ def init_db():
         if "country" not in cols:
             con.execute("ALTER TABLE users ADD COLUMN country TEXT NOT NULL DEFAULT 'Kenya'")
         con.execute("""CREATE TABLE IF NOT EXISTS deposits (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, amount REAL NOT NULL, phone TEXT NOT NULL, merchant_request_id TEXT, checkout_request_id TEXT UNIQUE, mpesa_receipt TEXT, status TEXT NOT NULL DEFAULT "PENDING", created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
+        deposit_cols = [r[1] for r in con.execute("PRAGMA table_info(deposits)").fetchall()]
+        if "mpesa_message" not in deposit_cols:
+            con.execute("ALTER TABLE deposits ADD COLUMN mpesa_message TEXT")
         con.execute("""CREATE TABLE IF NOT EXISTS wallets (user_id INTEGER PRIMARY KEY, balance REAL NOT NULL DEFAULT 0)""")
         con.execute("""CREATE TABLE IF NOT EXISTS demo_wallets (user_id INTEGER PRIMARY KEY, balance REAL NOT NULL DEFAULT 10000)""")
         con.execute("""CREATE TABLE IF NOT EXISTS trades (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, pair TEXT NOT NULL, side TEXT NOT NULL, amount REAL NOT NULL, entry_price REAL NOT NULL, status TEXT NOT NULL DEFAULT "OPEN", pnl REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, closed_at TEXT)""")
@@ -156,49 +160,41 @@ def deposit():
     error = None
     message = None
     amount = request.form.get("amount", "").strip() if request.method == "POST" else ""
+    phone = request.form.get("phone", "").strip() if request.method == "POST" else ""
     if request.method == "POST":
-        phone = normalize_phone(request.form.get("phone", "")).replace("+", "")
+        pasted = " ".join(request.form.get("mpesa_message", "").split()).strip()
         try:
-            value = float(amount)
+            value = round(float(amount), 2)
             if value < 10 or value > 150000:
                 error = "Enter an amount between KSh 10 and KSh 150,000."
-            elif not (phone.isdigit() and phone.startswith("254") and len(phone) == 12):
-                error = "Enter a valid Kenyan M-Pesa number."
+            elif len(pasted) < 10 or len(pasted) > 1200:
+                error = "Paste the full M-Pesa confirmation message."
             else:
-                shortcode = os.environ.get("MPESA_SHORTCODE")
-                passkey = os.environ.get("MPESA_PASSKEY")
-                callback_base = os.environ.get("MPESA_CALLBACK_BASE_URL", os.environ.get("RENDER_EXTERNAL_URL", "")).rstrip("/")
-                if not shortcode or not passkey or not callback_base:
-                    error = "M-Pesa integration is not configured on the server yet."
+                receipt_match = re.search(r"\b([A-Z0-9]{10})\b", pasted.upper())
+                if not receipt_match:
+                    error = "We could not find the 10-character M-Pesa receipt code. Paste the complete confirmation SMS."
                 else:
-                    token = daraja_token()
-                    ts = mpesa_timestamp()
-                    payload = {
-                        "BusinessShortCode": shortcode,
-                        "Password": mpesa_password(shortcode, passkey, ts),
-                        "Timestamp": ts,
-                        "TransactionType": os.environ.get("MPESA_TRANSACTION_TYPE", "CustomerPayBillOnline"),
-                        "Amount": int(value),
-                        "PartyA": phone,
-                        "PartyB": shortcode,
-                        "PhoneNumber": phone,
-                        "CallBackURL": callback_base + "/mpesa/callback",
-                        "AccountReference": f"TRADEON-{session['user_id']}",
-                        "TransactionDesc": "TRADEON wallet deposit"
-                    }
-                    base = os.environ.get("MPESA_BASE_URL", "https://sandbox.safaricom.co.ke")
-                    r = requests.post(base + "/mpesa/stkpush/v1/processrequest", headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}, json=payload, timeout=30)
-                    data = r.json()
-                    if r.ok and data.get("ResponseCode") == "0":
-                        with sqlite3.connect(DB) as con:
-                            con.execute("INSERT INTO deposits (user_id,amount,phone,merchant_request_id,checkout_request_id,status) VALUES (?,?,?,?,?,?)", (session["user_id"], value, phone, data.get("MerchantRequestID"), data.get("CheckoutRequestID"), "PENDING"))
-                            con.execute("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)", (session["user_id"],))
-                        message = "M-Pesa prompt sent. Check your phone and enter your M-Pesa PIN. Your wallet will only be credited after Safaricom confirms the payment."
+                    receipt = receipt_match.group(1)
+                    normalized_phone = normalize_phone(phone).replace("+", "") if phone else ""
+                    if normalized_phone and not (normalized_phone.isdigit() and normalized_phone.startswith("254") and len(normalized_phone) == 12):
+                        error = "Enter a valid Kenyan phone number, or leave it blank."
                     else:
-                        error = data.get("errorMessage") or data.get("ResponseDescription") or "Safaricom could not start the payment."
-        except (ValueError, requests.RequestException, RuntimeError, KeyError):
-            error = "Unable to start the M-Pesa payment. Check the server configuration and try again."
-    return render_template("deposit.html", error=error, message=message, amount=amount)
+                        with sqlite3.connect(DB) as con:
+                            duplicate = con.execute("SELECT id FROM deposits WHERE UPPER(COALESCE(mpesa_receipt,''))=? LIMIT 1", (receipt,)).fetchone()
+                            if duplicate:
+                                error = "That M-Pesa receipt has already been submitted. Contact the Manager if you believe this is an error."
+                            else:
+                                con.execute("INSERT INTO deposits (user_id,amount,phone,mpesa_receipt,status,mpesa_message) VALUES (?,?,?,?,?,?)",
+                                            (session["user_id"], value, normalized_phone or "Not provided", receipt, "PENDING", pasted))
+                                con.execute("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)", (session["user_id"],))
+                        if not error:
+                            message = "Payment submitted for verification. Your wallet will be credited only after the Manager confirms the M-Pesa receipt."
+                            amount = ""
+                            phone = ""
+        except (ValueError, TypeError):
+            error = "Enter a valid amount."
+    return render_template("deposit.html", error=error, message=message, amount=amount, phone=phone)
+
 
 @app.route("/mpesa/callback", methods=["POST"])
 def mpesa_callback():
@@ -976,6 +972,39 @@ def manager_monthly_backup():
     filename = "TRADEON_monthly_backup_" + exported_at.strftime("%Y-%m") + ".zip"
     return send_file(memory_file, mimetype="application/zip", as_attachment=True, download_name=filename)
 
+@app.route("/manager/deposit/<int:deposit_id>/review", methods=["POST"])
+def manager_review_deposit(deposit_id):
+    if not admin_required():
+        return redirect(url_for("manager_login"))
+    action = request.form.get("action", "").upper()
+    admin_name = os.environ.get("ADMIN_USERNAME", "admin")
+    with sqlite3.connect(DB) as con:
+        con.row_factory = sqlite3.Row
+        row = con.execute("SELECT id,user_id,amount,mpesa_receipt,status FROM deposits WHERE id=?", (deposit_id,)).fetchone()
+        if not row:
+            return redirect(url_for("manager") + "?deposit=missing")
+        if row["status"] != "PENDING":
+            return redirect(url_for("manager") + "?deposit=already-reviewed")
+        if action == "REJECT":
+            con.execute("UPDATE deposits SET status='REJECTED' WHERE id=? AND status='PENDING'", (deposit_id,))
+        elif action == "CONFIRM":
+            receipt = (row["mpesa_receipt"] or "").strip().upper()
+            if not receipt:
+                return redirect(url_for("manager") + "?deposit=missing-receipt")
+            duplicate = con.execute("SELECT id FROM deposits WHERE UPPER(COALESCE(mpesa_receipt,''))=? AND status='SUCCESS' AND id<>? LIMIT 1", (receipt, deposit_id)).fetchone()
+            if duplicate:
+                return redirect(url_for("manager") + "?deposit=duplicate")
+            cur = con.execute("UPDATE deposits SET status='SUCCESS' WHERE id=? AND status='PENDING'", (deposit_id,))
+            if cur.rowcount == 1:
+                con.execute("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)", (row["user_id"],))
+                con.execute("UPDATE wallets SET balance=balance+? WHERE user_id=?", (float(row["amount"]), row["user_id"]))
+                con.execute("INSERT INTO wallet_transactions (user_id,admin_username,transaction_type,amount,balance_after,reason) SELECT ?,?,'DEPOSIT',?,balance,? FROM wallets WHERE user_id=?",
+                            (row["user_id"], admin_name, float(row["amount"]), "Verified M-Pesa receipt " + receipt, row["user_id"]))
+        else:
+            return redirect(url_for("manager") + "?deposit=invalid-action")
+    return redirect(url_for("manager") + "?deposit=" + ("confirmed" if action == "CONFIRM" else "rejected"))
+
+
 @app.route("/manager")
 def manager_dashboard():
     if not admin_required():
@@ -986,15 +1015,28 @@ def manager_dashboard():
         pending = con.execute("SELECT COUNT(*) FROM deposits WHERE status='PENDING'").fetchone()[0]
         successful = con.execute("SELECT COALESCE(SUM(amount),0) FROM deposits WHERE status='SUCCESS'").fetchone()[0]
         deposits = con.execute("""
-            SELECT d.id, u.name, d.phone, d.amount, d.status, d.mpesa_receipt, d.created_at
+            SELECT d.id, u.name, d.phone, d.amount, d.status, d.mpesa_receipt, d.created_at, d.mpesa_message
             FROM deposits d JOIN users u ON u.id=d.user_id
             ORDER BY d.id DESC LIMIT 50
         """).fetchall()
-    rows = "".join(
-        f"<tr><td>{d[0]}</td><td>{d[1]}</td><td>{d[2]}</td><td>KSh {d[3]:,.2f}</td><td>{d[4]}</td><td>{d[5] or '-'}</td><td>{d[6]}</td></tr>"
-        for d in deposits
-    )
-    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Manager</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa;color:#111}}header{{background:#111;color:white;padding:18px 5%;display:flex;justify-content:space-between}}main{{padding:24px 5%}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}}.card{{background:white;padding:18px;border-radius:12px;box-shadow:0 2px 10px #0001}}table{{width:100%;border-collapse:collapse;background:white;margin-top:20px;font-size:13px}}th,td{{padding:10px;border-bottom:1px solid #eee;text-align:left}}.tablewrap{{overflow:auto}}a{{color:white}}</style></head><body><header><b>TRADEON MANAGER</b><a href="/manager/logout">Logout</a></header><main><p><a href="/manager/users" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">👥 Manage Users</a></p><p><a href="/manager/wallets" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">💰 Manage Balances & Blocking</a></p><p><a href="/manager/signals" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">📈 Create & Manage Signals</a></p><p><a href="/manager/settings" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">⚙️ Demo Trading Settings</a></p><p><a href="/manager/backup/monthly" style="display:inline-block;background:#0b6b3a;color:white;padding:12px 14px;border-radius:8px;text-decoration:none;font-weight:bold">⬇️ Download Monthly Data Backup (ZIP)</a></p><p style="font-size:13px;color:#555">Downloads a complete snapshot of all database tables as CSV files in a ZIP archive. Download and store it safely every month.</p><h2>Dashboard</h2><div class="cards"><div class="card"><b>Users</b><h2>{users}</h2></div><div class="card"><b>Verified</b><h2>{verified}</h2></div><div class="card"><b>Pending deposits</b><h2>{pending}</h2></div><div class="card"><b>Successful deposits</b><h2>KSh {successful:,.2f}</h2></div></div><h2>Recent deposits</h2><div class="tablewrap"><table><tr><th>ID</th><th>User</th><th>Phone</th><th>Amount</th><th>Status</th><th>Receipt</th><th>Date</th></tr>{rows or "<tr><td colspan='7'>No deposits yet.</td></tr>"}</table></div></main></body></html>"""
+    rows = ""
+    for d in deposits:
+        action = ""
+        if d[4] == "PENDING":
+            action = (f'<form method="post" action="/manager/deposit/{int(d[0])}/review" style="display:flex;gap:6px;min-width:150px">'
+                      '<button name="action" value="CONFIRM" style="background:#087443;color:white;border:0;border-radius:6px;padding:8px">Confirm</button>'
+                      '<button name="action" value="REJECT" style="background:#a52b37;color:white;border:0;border-radius:6px;padding:8px">Reject</button></form>')
+        rows += ("<tr>"
+                 f"<td>{int(d[0])}</td><td>{escape(str(d[1] or ''))}</td><td>{escape(str(d[2] or ''))}</td>"
+                 f"<td>KSh {float(d[3]):,.2f}</td><td>{escape(str(d[4]))}</td>"
+                 f"<td>{escape(str(d[5] or '-'))}</td><td>{escape(str(d[6] or ''))}</td>"
+                 f"<td style='white-space:pre-wrap;min-width:260px;max-width:360px'>{escape(str(d[7] or 'No pasted message'))}</td><td>{action or '-'}</td></tr>")
+    notice = request.args.get("deposit", "")
+    notices = {"confirmed":"Deposit confirmed and wallet credited.","rejected":"Deposit rejected; no wallet credit was made.",
+               "already-reviewed":"This deposit was already reviewed.","duplicate":"Receipt already confirmed on another deposit.",
+               "missing":"Deposit not found.","missing-receipt":"Cannot confirm without a receipt code.","invalid-action":"Invalid review action."}
+    alert = f"<p style='padding:12px;background:#e8f6ed;border-radius:8px'>{escape(notices.get(notice, ''))}</p>" if notice in notices else ""
+    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TRADEON Manager</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa;color:#111}}header{{background:#111;color:white;padding:18px 5%;display:flex;justify-content:space-between}}main{{padding:24px 5%}}.cards{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}}.card{{background:white;padding:18px;border-radius:12px;box-shadow:0 2px 10px #0001}}table{{width:100%;border-collapse:collapse;background:white;margin-top:20px;font-size:13px}}th,td{{padding:10px;border-bottom:1px solid #eee;text-align:left;vertical-align:top}}.tablewrap{{overflow:auto}}a{{color:white}}</style></head><body><header><b>TRADEON MANAGER</b><a href="/manager/logout">Logout</a></header><main><p><a href="/manager/users" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">👥 Manage Users</a></p><p><a href="/manager/wallets" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">💰 Manage Balances & Blocking</a></p><p><a href="/manager/signals" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">📈 Create & Manage Signals</a></p><p><a href="/manager/settings" style="display:inline-block;background:#111;color:white;padding:10px 14px;border-radius:8px;text-decoration:none">⚙️ Demo Trading Settings</a></p><p><a href="/manager/backup/monthly" style="display:inline-block;background:#0b6b3a;color:white;padding:12px 14px;border-radius:8px;text-decoration:none;font-weight:bold">⬇️ Download Monthly Data Backup (ZIP)</a></p><p style="font-size:13px;color:#555">Downloads a complete snapshot of all database tables as CSV files in a ZIP archive. Download and store it safely every month.</p>{alert}<h2>Dashboard</h2><div class="cards"><div class="card"><b>Users</b><h2>{users}</h2></div><div class="card"><b>Verified</b><h2>{verified}</h2></div><div class="card"><b>Pending deposits</b><h2>{pending}</h2></div><div class="card"><b>Successful deposits</b><h2>KSh {successful:,.2f}</h2></div></div><h2>Deposits — verify pasted M-Pesa messages</h2><p>Confirm only after matching the receipt in the official M-Pesa message. Confirmation credits the wallet once.</p><div class="tablewrap"><table><tr><th>ID</th><th>User</th><th>Phone</th><th>Amount</th><th>Status</th><th>Receipt code</th><th>Date</th><th>Pasted M-Pesa message</th><th>Review</th></tr>{rows or "<tr><td colspan='9'>No deposits yet.</td></tr>"}</table></div></main></body></html>"""
 
 
 @app.route("/manager/wallets", methods=["GET", "POST"])
