@@ -156,9 +156,21 @@ function refreshTradePriceLines(trades){
 function chartRowsFromKlines(rows){
  return rows.map(k=>({time:Math.floor(Number(k[0])/1000),open:Number(k[1]),high:Number(k[2]),low:Number(k[3]),close:Number(k[4])})).filter(k=>k.time&&k.open>0&&k.high>0&&k.low>0&&k.close>0);
 }
+function renderFallbackChart(rows){
+ const host=document.getElementById('tvChart');if(!host||!rows||!rows.length)return;
+ const width=Math.max(280,host.clientWidth||320),height=Math.max(220,host.clientHeight||260);
+ const data=rows.slice(-90),left=8,right=62,top=12,bottom=24,plotW=width-left-right,plotH=height-top-bottom;
+ const hi=Math.max(...data.map(x=>x.high)),lo=Math.min(...data.map(x=>x.low)),range=(hi-lo)||1;
+ const y=v=>top+(hi-v)/range*plotH,step=plotW/data.length,cw=Math.max(2,Math.min(9,step*.62));
+ let svg='<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" style="display:block;background:#151a21">';
+ for(let j=0;j<5;j++){const yy=top+j*plotH/4,price=hi-j*range/4;svg+='<line x1="'+left+'" y1="'+yy+'" x2="'+(width-right+2)+'" y2="'+yy+'" stroke="#29313a" stroke-width="1"/><text x="'+(width-right+5)+'" y="'+(yy+4)+'" fill="#aab5c1" font-size="10">'+price.toLocaleString('en-US',{maximumFractionDigits:2})+'</text>'}
+ data.forEach((c,i)=>{const x=left+i*step+step/2,up=c.close>=c.open,color=up?'#20c997':'#ff5b62',yo=y(c.open),yc=y(c.close),body=Math.max(1,Math.abs(yc-yo));svg+='<line x1="'+x+'" y1="'+y(c.high)+'" x2="'+x+'" y2="'+y(c.low)+'" stroke="'+color+'" stroke-width="1.2"/><rect x="'+(x-cw/2)+'" y="'+Math.min(yo,yc)+'" width="'+cw+'" height="'+body+'" fill="'+color+'"/>'});
+ const last=data[data.length-1],py=y(last.close);svg+='<line x1="'+left+'" y1="'+py+'" x2="'+(width-right+2)+'" y2="'+py+'" stroke="#f0c674" stroke-dasharray="3 3"/><text x="'+left+'" y="'+(height-6)+'" fill="#aab5c1" font-size="10">Recent market candles · '+chartInterval+'</text></svg>';
+ host.innerHTML=svg;
+}
 async function loadChart(){
  if(chartBusy)return;
- if(!initTvChart())return;
+ const chartReady=initTvChart();
  chartBusy=true;
  const status=document.getElementById('chartStatus'),note=document.getElementById('feedNote');
  try{
@@ -169,15 +181,16 @@ async function loadChart(){
   if(!rows.length)throw Error('No market candles returned');
   liveShortCandles=rows.slice();liveCandle=rows[rows.length-1];
   const chartData=(chartType==='line'||chartType==='area')?rows.map(k=>({time:k.time,value:k.close})):rows;
-  tvSeries.setData(chartData);
-  tvChart.timeScale().fitContent();
+  if(chartReady&&tvSeries&&tvChart){tvSeries.setData(chartData);tvChart.timeScale().fitContent();}
+  else renderFallbackChart(rows);
   candleCloseAt=(rows[rows.length-1].time+intervalSeconds())*1000;updateCandleClock();
-  if(status)status.textContent='Live Binance candlesticks · '+currentPair+' · '+chartInterval;
-  if(note)note.textContent='Live market · trade lines';
-  try{const tr=await fetch('/api/trades/open',{cache:'no-store'});if(tr.ok){const data=await tr.json();refreshTradePriceLines(data.trades||[]);}}catch(e){}
+  if(status)status.textContent=(chartReady?'Live Binance candlesticks':'Market chart fallback')+' · '+currentPair+' · '+chartInterval;
+  if(note)note.textContent='Market data · refreshes automatically';
+  if(chartReady){try{const tr=await fetch('/api/trades/open',{cache:'no-store'});if(tr.ok){const data=await tr.json();refreshTradePriceLines(data.trades||[]);}}catch(e){}}
  }catch(e){
-  if(status)status.textContent='Market candles unavailable. Check connection and refresh.';
-  if(note)note.textContent='Waiting for live market candles';
+  if(status)status.textContent='Market data unavailable. Check connection and refresh.';
+  if(note)note.textContent='Waiting for market data';
+  const host=document.getElementById('tvChart');if(host&&!host.innerHTML.trim())host.innerHTML='<div style="height:100%;min-height:220px;display:flex;align-items:center;justify-content:center;color:#aab5c1;text-align:center;padding:20px">Chart is reconnecting to market data…</div>';
  }finally{chartBusy=false}
 }
 
