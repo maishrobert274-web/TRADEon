@@ -173,7 +173,7 @@ function loadChart(){
  const frame=document.getElementById('tradingViewFrame');if(!frame)return;
  const symbol='BINANCE:'+currentSymbol;
  const interval=tradingViewInterval();
- const src='https://www.tradingview.com/widgetembed/?frameElementId=tradeon_tradingview&symbol='+encodeURIComponent(symbol)+'&interval='+encodeURIComponent(interval)+'&hide_side_toolbar=0&symboledit=0&saveimage=0&toolbarbg=151a21&theme=dark&style=1&timezone=Etc%2FUTC&withdateranges=1&hideideas=1&locale=en&allow_symbol_change=0&details=0&hotlist=0&calendar=0';
+ const src='https://s.tradingview.com/widgetembed/?frameElementId=tradeon_tradingview&symbol='+encodeURIComponent(symbol)+'&interval='+encodeURIComponent(interval)+'&hide_side_toolbar=0&symboledit=0&saveimage=0&toolbarbg=151a21&theme=dark&style=1&timezone=Etc%2FUTC&withdateranges=1&hideideas=1&locale=en&allow_symbol_change=0&details=0&hotlist=0&calendar=0';
  if(frame.dataset.symbol!==symbol||frame.dataset.interval!==interval){frame.src=src;frame.dataset.symbol=symbol;frame.dataset.interval=interval;}
  const status=document.getElementById('chartStatus');if(status)status.textContent='TradingView live chart · '+currentPair+' · '+chartInterval;
  const note=document.getElementById('feedNote');if(note)note.textContent='Powered by TradingView';
