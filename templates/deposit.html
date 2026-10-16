@@ -22,6 +22,7 @@ label{display:block;margin:20px 0 8px;font-weight:700}input{width:100%;padding:1
 <div class="top"><div class="logo">TRADEON</div><a class="back" href="/">← Dashboard</a></div>
 <div class="card">
 <h1>Deposit USD</h1>
+<div style="display:flex;gap:10px;margin:12px 0 16px"><a href="/withdraw" style="flex:1;text-align:center;text-decoration:none;padding:13px;border-radius:10px;background:#24384d;color:#fff;font-weight:800;border:1px solid #40566e">↗ Withdraw funds</a><a href="/wallet" style="flex:1;text-align:center;text-decoration:none;padding:13px;border-radius:10px;background:#24384d;color:#fff;font-weight:800;border:1px solid #40566e">Wallet balance</a></div>
 <p>Minimum deposit: <strong style="color:#fff">$10 USD</strong> (approximately <strong style="color:#fff">KSh 1,300</strong>). M-Pesa payments are sent in KSh, so enter the KSh amount shown in your M-Pesa confirmation. Your wallet is credited after the Manager verifies the receipt.</p>
 {% if error %}<div class="error">{{ error }}</div>{% endif %}
 {% if message %}<div class="success">{{ message }}</div>{% endif %}
