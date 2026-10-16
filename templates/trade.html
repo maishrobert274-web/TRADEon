@@ -34,6 +34,62 @@
  .top .balance{order:1;white-space:nowrap;padding:7px 8px;font-size:10px}
 }
 
+
+/* Screenshot-matched mobile trading terminal */
+@media(max-width:800px){
+ html,body{background:#1d2132!important;color:#eef2fa!important;overflow-x:hidden}
+ .top{min-height:70px!important;padding:8px 12px!important;background:#1d2132!important;border-bottom:1px solid #30364a!important}
+ .top>.brand{width:auto!important;flex:1;font-size:20px!important;letter-spacing:.5px}
+ .top>div:last-child{width:auto!important;flex:2;justify-content:flex-end!important;gap:7px!important}
+ .top .navlinks{flex:0 0 auto!important;gap:5px!important}
+ .top .account-btn{min-height:38px!important;padding:8px!important;font-size:12px!important}
+ .top .balance{order:0!important;padding:8px 10px!important;font-size:12px!important;background:#252a3d!important;color:#e8edf8!important;border:1px solid #34394d!important}
+ .wrap{padding:5px!important;gap:4px!important}
+ .wrap>section{margin:0!important}
+ .wrap .card{border:0!important;border-radius:0!important;background:#1d2132!important}
+ .marketbar{background:#1d2132!important;border:0!important;padding:7px!important;gap:5px!important}
+ .pair{background:#292f44!important;border:0!important;border-radius:10px!important;color:#f3f5fb!important;padding:10px 12px!important;font-size:12px!important;flex:1;text-align:center}
+ .pair.active{background:#30374d!important;border-color:#30374d!important;color:#fff!important}
+ .pricehead{padding:6px 10px 8px!important}
+ .symbol{font-size:15px!important;color:#f5f6fb!important}
+ .price{font-size:19px!important}
+ .chart{height:52vh!important;min-height:300px!important;max-height:520px!important;padding:0!important;background:#1d2132!important}
+ .chart #tvChart{height:100%!important;min-height:300px!important;background:#1d2132!important}
+ .chartfoot{padding:5px 10px!important;font-size:10px!important;color:#a4aec2!important}
+ .chart-controls{padding:0 7px 5px!important}
+ .timeframes{gap:5px!important;padding:5px 0!important}
+ .timeframes button{background:#292f44!important;border:0!important;color:#dce2f1!important;border-radius:6px!important;padding:7px 5px!important;font-size:10px!important}
+ .timeframes .selected{background:#3b4560!important;color:#fff!important}
+ .below-actions{position:relative!important;display:grid!important;grid-template-columns:1fr!important;gap:8px!important;margin:5px 4px 82px!important;padding:12px!important;border:0!important;border-radius:12px!important;background:#252a3d!important}
+ .trade-amount{display:grid!important;grid-template-columns:1fr 1fr!important;gap:5px 9px!important;align-items:end}
+ .trade-amount>label[for="amount"]{grid-column:2!important;grid-row:1!important}
+ .trade-amount>#amount{grid-column:2!important;grid-row:2!important}
+ .trade-amount>.presets{display:none!important}
+ .trade-amount>label[for="orderType"],.trade-amount>#orderType{display:none!important}
+ .trade-amount>#durationBox{display:block!important;grid-column:1!important;grid-row:1/span 2!important;min-width:0}
+ #durationBox .label{margin:0 0 7px!important}
+ #durationBox select{width:100%!important;min-height:45px!important;background:#1e2335!important;border:1px solid #353b50!important;border-radius:8px!important;font-size:14px!important}
+ .trade-amount .label{font-size:12px!important;color:#a9b4ca!important;margin:0 0 7px!important}
+ .trade-amount .amount{min-height:45px!important;background:#1e2335!important;border:1px solid #353b50!important;border-radius:8px!important;font-size:16px!important;padding:10px!important}
+ .below-actions .actions{display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important;margin:3px 0 0!important}
+ .below-actions .actions button{min-height:66px!important;border-radius:11px!important;font-size:14px!important;padding:10px!important}
+ .below-actions .buy{background:#2eae4b!important}
+ .below-actions .sell{background:#f33332!important}
+ .below-actions .status{font-size:11px!important;line-height:1.4!important;color:#b7c0d1!important}
+ .shortcut-grid{background:#1d2132!important;border-top:1px solid #30364a!important;box-shadow:none!important;gap:2px!important;padding:5px 6px calc(6px + env(safe-area-inset-bottom,0px))!important}
+ .shortcut{background:transparent!important;border:0!important;border-radius:8px!important;color:#aab5cb!important;min-height:50px!important;font-size:10px!important}
+ .shortcut-icon{font-size:20px!important;color:#aab5cb!important}
+ .open-positions{margin:5px 4px 85px!important}
+ .disclaimer{padding-bottom:85px!important}
+}
+@media(max-width:390px){
+ .top>.brand{font-size:18px!important}
+ .top .balance{font-size:10px!important;padding:7px!important}
+ .chart{height:49vh!important;min-height:275px!important}
+ .below-actions{padding:9px!important}
+ .below-actions .actions button{min-height:60px!important}
+}
+
 </style>
 </head>
 <body>
