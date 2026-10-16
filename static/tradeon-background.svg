@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+<defs>
+ <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#030711"/><stop offset=".48" stop-color="#07182a"/><stop offset="1" stop-color="#02050b"/></linearGradient>
+ <radialGradient id="blue"><stop stop-color="#087bc0" stop-opacity=".48"/><stop offset="1" stop-color="#087bc0" stop-opacity="0"/></radialGradient>
+ <radialGradient id="green"><stop stop-color="#00d78a" stop-opacity=".30"/><stop offset="1" stop-color="#00d78a" stop-opacity="0"/></radialGradient>
+ <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse"><path d="M48 0H0V48" fill="none" stroke="#65b9e8" stroke-opacity=".09" stroke-width="1"/></pattern>
+ <filter id="glow"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+<rect width="1600" height="1000" fill="url(#bg)"/><rect width="1600" height="1000" fill="url(#grid)"/>
+<ellipse cx="1300" cy="180" rx="650" ry="470" fill="url(#blue)"/><ellipse cx="230" cy="690" rx="650" ry="440" fill="url(#green)"/>
+<g fill="none" stroke="#14d995" stroke-opacity=".14" stroke-width="2"><path d="M0 760C220 650 290 810 480 660S800 600 960 480 1270 500 1600 170"/><path d="M0 825C240 710 310 865 500 715S820 650 990 530 1300 550 1600 220"/><path d="M0 890C250 770 330 920 530 770S850 705 1020 585 1330 605 1600 275"/></g>
+<g stroke-linecap="round" filter="url(#glow)">
+ <g stroke="#19dc91" stroke-width="5" fill="#19dc91" fill-opacity=".7">
+ <path d="M900 520V385 M884 410H916V480H884Z"/><path d="M1000 480V315 M984 350H1016V430H984Z"/><path d="M1100 405V260 M1084 280H1116V365H1084Z"/><path d="M1200 360V195 M1184 220H1216V310H1184Z"/><path d="M1300 280V145 M1284 165H1316V235H1284Z"/>
+ </g>
+ <path d="M830 540L930 455 1020 390 1120 310 1210 255 1320 180 1435 135" stroke="#24e8a0" stroke-width="5" fill="none"/>
+ <path d="M830 540L930 455 1020 390 1120 310 1210 255 1320 180 1435 135" stroke="#24e8a0" stroke-opacity=".25" stroke-width="20" fill="none"/>
+</g>
+<g fill="#d9f7ff" fill-opacity=".55"><circle cx="930" cy="455" r="4"/><circle cx="1120" cy="310" r="4"/><circle cx="1320" cy="180" r="4"/></g>
+<rect x="0" y="0" width="1600" height="1000" fill="#020711" opacity=".12"/>
+</svg>
