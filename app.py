@@ -166,7 +166,7 @@ def deposit():
         try:
             value = round(float(amount), 2)
             if value < 1300 or value > 150000:
-                error = "Enter an amount between KSh 10 and KSh 150,000."
+                error = "The minimum deposit is $10 USD (approximately KSh 1,300). Enter KSh 1,300 to KSh 150,000."
             elif len(pasted) < 10 or len(pasted) > 1200:
                 error = "Paste the full M-Pesa confirmation message."
             else:
