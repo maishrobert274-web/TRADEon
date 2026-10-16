@@ -33,7 +33,7 @@ header,.top,.navbar,nav{background:rgba(3,10,22,.78)!important;backdrop-filter:b
 <div class="notice"><b>Demo status:</b> Market prices are informational. Orders are not sent to a cryptocurrency exchange. Do not deposit real money until payments and trading have been fully tested and approved.</div>
 <div class="tabs"><button class="tab active" data-pair="BTC/USDT" data-symbol="BTCUSDT" onclick="setPair(this)">BTC/USDT</button><button class="tab" data-pair="ETH/USDT" data-symbol="ETHUSDT" onclick="setPair(this)">ETH/USDT</button><button class="tab" data-pair="SOL/USDT" data-symbol="SOLUSDT" onclick="setPair(this)">SOL/USDT</button></div>
 <section class="card"><div class="marketTop"><span class="pair" id="pair">BTC/USDT</span><span id="change" class="muted">--</span></div><div class="price" id="price">Loading market price…</div><div class="muted" id="marketStatus">Checking public market data</div></section>
-<section class="card chartCard"><div class="marketTop"><div><b style="font-size:18px">TRADEON Chart</b><div class="muted" style="margin-top:5px">Candlesticks · public market data</div></div><span id="candlePrice" class="muted">--</span></div><div class="timeframes"><button class="tf" data-interval="1m" onclick="setIntervalChart(this)">1m</button><button class="tf" data-interval="5m" onclick="setIntervalChart(this)">5m</button><button class="tf" data-interval="15m" onclick="setIntervalChart(this)">15m</button><button class="tf active" data-interval="1h" onclick="setIntervalChart(this)">1H</button><button class="tf" data-interval="4h" onclick="setIntervalChart(this)">4H</button><button class="tf" data-interval="1d" onclick="setIntervalChart(this)">1D</button></div><div class="chartWrap"><canvas id="priceChart" aria-label="Candlestick chart for selected market"></canvas></div><div class="chartMeta"><span id="chartStatus">Loading candles…</span><span>Market data only</span></div></section>\n<section class="card"><h3 style="margin-top:0">Demo trade</h3><div class="muted">Choose an amount in Kenyan shillings</div>
+<section class="card chartCard"><div class="marketTop"><div><b style="font-size:18px">TRADEON Chart</b><div class="muted" style="margin-top:5px">Live candlestick chart</div></div><span id="candlePrice" class="muted">--</span></div><div class="timeframes"><button class="tf" data-interval="1m" onclick="setIntervalChart(this)">1m</button><button class="tf" data-interval="5m" onclick="setIntervalChart(this)">5m</button><button class="tf" data-interval="15m" onclick="setIntervalChart(this)">15m</button><button class="tf active" data-interval="1h" onclick="setIntervalChart(this)">1H</button><button class="tf" data-interval="4h" onclick="setIntervalChart(this)">4H</button><button class="tf" data-interval="1d" onclick="setIntervalChart(this)">1D</button></div><div class="chartWrap"><canvas id="priceChart" aria-label="Candlestick chart for selected market"></canvas></div><div class="chartMeta"><span id="chartStatus">Updating chart…</span><span>Market data only</span></div></section>\n<section class="card"><h3 style="margin-top:0">Demo trade</h3><div class="muted">Choose an amount in Kenyan shillings</div>
 <div class="amounts"><button class="amt" onclick="setAmount(100)">100</button><button class="amt" onclick="setAmount(500)">500</button><button class="amt" onclick="setAmount(1000)">1,000</button><button class="amt" onclick="setAmount(5000)">5,000</button></div>
 <input id="amount" class="custom" type="number" min="10" step="1" placeholder="Enter amount (minimum KSh 10)">
 <div class="actions" style="margin-top:12px"><button class="buy" onclick="trade('BUY')">BUY</button><button class="sell" onclick="trade('SELL')">SELL</button></div>
@@ -64,10 +64,10 @@ async function loadPrice(){
   const change=Number(data.change_percent);
   changeEl.textContent=(change>=0?'+':'')+change.toFixed(2)+'%';
   changeEl.className=change>=0?'up':'down';
-  status.textContent='Source: '+(data.source||'market data')+' · refreshed just now';
+  status.textContent='Market price updated';
  }catch(error){
   price.textContent='Temporarily unavailable';changeEl.textContent='--';
-  changeEl.className='muted';status.textContent='Could not retrieve public market data. Please try again shortly.';
+  changeEl.className='muted';status.textContent='Market data temporarily unavailable. Retrying shortly…';
  }
 }
 let chartInterval='1h';
@@ -80,7 +80,7 @@ async function loadChart(){
  const canvas=document.getElementById('priceChart'), status=document.getElementById('chartStatus');
  if(!canvas||!status)return;
  const ctx=canvas.getContext('2d');
- status.textContent='Loading candles…';
+ status.textContent='Updating chart…';
  try{
   const response=await fetch('/api/market/history?symbol='+encodeURIComponent(currentSymbol)+'&interval='+encodeURIComponent(chartInterval));
   const data=await response.json();
@@ -122,12 +122,12 @@ async function loadChart(){
   ctx.setLineDash([4,4]);ctx.strokeStyle='#5b9cff';ctx.beginPath();ctx.moveTo(pad.l,lastY);ctx.lineTo(width-pad.r,lastY);ctx.stroke();ctx.setLineDash([]);
   ctx.fillStyle='#2459a9';ctx.fillRect(width-pad.r+1,lastY-9,pad.r-3,18);ctx.fillStyle='#fff';ctx.font='bold 10px Arial';ctx.fillText(lastPrice.toLocaleString('en-US',{maximumFractionDigits:2}),width-pad.r+4,lastY+3);
   const candlePrice=document.getElementById('candlePrice');if(candlePrice)candlePrice.textContent=lastPrice.toLocaleString('en-US',{maximumFractionDigits:8})+' USDT';
-  status.textContent='Source: '+(data.source||'market data')+' · '+candles.length+' candles';
+  status.textContent='Chart updated · '+candles.length+' candles';
  }catch(error){
   const dpr=window.devicePixelRatio||1,width=Math.max(280,canvas.clientWidth),height=Math.max(180,canvas.clientHeight);
   canvas.width=width*dpr;canvas.height=height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,width,height);
   ctx.fillStyle='#9aa9bc';ctx.font='13px Arial';ctx.fillText('Candlestick data unavailable',16,35);
-  status.textContent='Could not load candles. Please try again shortly.';
+  status.textContent='Chart temporarily unavailable. Retrying shortly…';
  }
 }
 async function trade(side){
@@ -156,12 +156,12 @@ window.addEventListener("resize",loadChart);
   ctx.setLineDash([4,4]);ctx.strokeStyle='#5b9cff';ctx.beginPath();ctx.moveTo(pad.l,lastY);ctx.lineTo(width-pad.r,lastY);ctx.stroke();ctx.setLineDash([]);
   ctx.fillStyle='#2459a9';ctx.fillRect(width-pad.r+1,lastY-9,pad.r-3,18);ctx.fillStyle='#fff';ctx.font='bold 10px Arial';ctx.fillText(lastPrice.toLocaleString('en-US',{maximumFractionDigits:2}),width-pad.r+4,lastY+3);
   const candlePrice=document.getElementById('candlePrice');if(candlePrice)candlePrice.textContent=lastPrice.toLocaleString('en-US',{maximumFractionDigits:8})+' USDT';
-  status.textContent='Source: '+(data.source||'market data')+' · '+candles.length+' candles';
+  status.textContent='Chart updated · '+candles.length+' candles';
  }catch(error){
   const dpr=window.devicePixelRatio||1,width=Math.max(280,canvas.clientWidth),height=Math.max(180,canvas.clientHeight);
   canvas.width=width*dpr;canvas.height=height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,width,height);
   ctx.fillStyle='#9aa9bc';ctx.font='13px Arial';ctx.fillText('Candlestick data unavailable',16,35);
-  status.textContent='Could not load candles. Please try again shortly.';
+  status.textContent='Chart temporarily unavailable. Retrying shortly…';
  }
 }
 async function trade(side){
@@ -200,12 +200,12 @@ window.addEventListener("resize",loadChart);
   ctx.setLineDash([4,4]);ctx.strokeStyle='#5b9cff';ctx.beginPath();ctx.moveTo(pad.l,lastY);ctx.lineTo(width-pad.r,lastY);ctx.stroke();ctx.setLineDash([]);
   ctx.fillStyle='#2459a9';ctx.fillRect(width-pad.r+1,lastY-9,pad.r-3,18);ctx.fillStyle='#fff';ctx.font='bold 10px Arial';ctx.fillText(lastPrice.toLocaleString('en-US',{maximumFractionDigits:2}),width-pad.r+4,lastY+3);
   const candlePrice=document.getElementById('candlePrice');if(candlePrice)candlePrice.textContent=lastPrice.toLocaleString('en-US',{maximumFractionDigits:8})+' USDT';
-  status.textContent='Source: '+(data.source||'market data')+' · '+candles.length+' candles';
+  status.textContent='Chart updated · '+candles.length+' candles';
  }catch(error){
   const dpr=window.devicePixelRatio||1,width=Math.max(280,canvas.clientWidth),height=Math.max(180,canvas.clientHeight);
   canvas.width=width*dpr;canvas.height=height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,width,height);
   ctx.fillStyle='#9aa9bc';ctx.font='13px Arial';ctx.fillText('Candlestick data unavailable',16,35);
-  status.textContent='Could not load candles. Please try again shortly.';
+  status.textContent='Chart temporarily unavailable. Retrying shortly…';
  }
 }
 async function trade(side){
