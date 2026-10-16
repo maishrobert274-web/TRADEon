@@ -374,28 +374,56 @@ def settle_due_demo_trades():
     if "user_id" not in session:
         return {"error": "login required"}, 401
     symbols = {"BTC/USDT": "BTCUSDT", "ETH/USDT": "ETHUSDT", "SOL/USDT": "SOLUSDT"}
+    products = {"BTCUSDT": "BTC-USD", "ETHUSDT": "ETH-USD", "SOLUSDT": "SOL-USD"}
     with sqlite3.connect(DB) as con:
-        due = con.execute("SELECT id,pair,side,amount,entry_price FROM trades WHERE user_id=? AND mode='DURATION' AND status='OPEN' AND expires_at<=CURRENT_TIMESTAMP", (session["user_id"],)).fetchall()
-        results = []
+        due = con.execute(
+            "SELECT id,pair,side,amount,entry_price FROM trades WHERE user_id=? AND mode='DURATION' AND status='OPEN' AND datetime(expires_at)<=CURRENT_TIMESTAMP",
+            (session["user_id"],)
+        ).fetchall()
+        results, errors = [], []
+        settings = dict(con.execute("SELECT key,value FROM app_settings").fetchall())
+        win_percent = max(0, min(100, float(settings.get("demo_win_percent", "20"))))
+        loss_percent = max(0, min(100, float(settings.get("demo_loss_percent", "100"))))
         for row in due:
             if row[1] not in symbols:
+                errors.append({"trade_id": row[0], "error": "Unsupported market for settlement."})
                 continue
+            exit_price = None
             try:
-                response = requests.get("https://data-api.binance.vision/api/v3/ticker/price", params={"symbol": symbols[row[1]]}, timeout=(1.5, 3))
+                response = requests.get(
+                    "https://data-api.binance.vision/api/v3/ticker/price",
+                    params={"symbol": symbols[row[1]]}, timeout=(1.5, 3)
+                )
                 response.raise_for_status()
                 exit_price = float(response.json()["price"])
-            except (requests.RequestException, KeyError, ValueError):
-                continue
+            except (requests.RequestException, KeyError, TypeError, ValueError):
+                try:
+                    response = requests.get(
+                        f"https://api.exchange.coinbase.com/products/{products[symbols[row[1]]]}/ticker",
+                        headers={"User-Agent": "TRADEON-settlement"}, timeout=(1.5, 3)
+                    )
+                    response.raise_for_status()
+                    exit_price = float(response.json()["price"])
+                except (requests.RequestException, KeyError, TypeError, ValueError):
+                    errors.append({"trade_id": row[0], "error": "Market price unavailable from Binance and Coinbase; will retry."})
+                    continue
             entry_price, amount = float(row[4]), float(row[3])
             won = (row[2] == "BUY" and exit_price > entry_price) or (row[2] == "SELL" and exit_price < entry_price)
-            settings = dict(con.execute("SELECT key,value FROM app_settings").fetchall())
-            win_percent = max(0, min(100, float(settings.get("demo_win_percent", "20"))))
-            loss_percent = max(0, min(100, float(settings.get("demo_loss_percent", "100"))))
             pnl = round(amount * win_percent / 100, 2) if won else -round(amount * loss_percent / 100, 2)
-            con.execute("UPDATE trades SET status='CLOSED',pnl=?,closed_at=CURRENT_TIMESTAMP,settlement_price=? WHERE id=? AND user_id=? AND status='OPEN'", (pnl, exit_price, row[0], session["user_id"]))
-            con.execute("UPDATE demo_wallets SET balance=balance+? WHERE user_id=?", (amount + pnl if won else 0, session["user_id"]))
-            results.append({"trade_id": row[0], "won": won, "pnl": pnl, "exit_price": exit_price})
-    return {"ok": True, "settled": results}
+            cur = con.execute(
+                "UPDATE trades SET status='CLOSED',pnl=?,closed_at=CURRENT_TIMESTAMP,settlement_price=? WHERE id=? AND user_id=? AND status='OPEN'",
+                (pnl, exit_price, row[0], session["user_id"])
+            )
+            if cur.rowcount:
+                # The stake was deducted when opened. Restore stake plus winnings only on a win.
+                if won:
+                    con.execute("UPDATE demo_wallets SET balance=balance+? WHERE user_id=?", (amount + pnl, session["user_id"]))
+                results.append({"trade_id": row[0], "won": won, "pnl": pnl, "exit_price": exit_price})
+        pending = con.execute(
+            "SELECT COUNT(*) FROM trades WHERE user_id=? AND mode='DURATION' AND status='OPEN'",
+            (session["user_id"],)
+        ).fetchone()[0]
+    return {"ok": True, "settled": results, "errors": errors, "pending": pending}
 
 @app.route("/trades/<int:trade_id>/close", methods=["POST"])
 def close_demo_trade(trade_id):
