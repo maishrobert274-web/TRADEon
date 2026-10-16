@@ -841,8 +841,10 @@ def withdraw():
         try:
             value = round(float(amount), 2)
             normalized_phone = normalize_phone(phone).replace("+", "")
-            if value <= 0 or value > balance:
-                error = "Enter an amount above KSh 0 and no greater than your available balance."
+            if value < 13000:
+                error = "The minimum withdrawal is $100 USD (approximately KSh 13,000)."
+            elif value > balance:
+                error = "Enter an amount no greater than your available balance."
             elif not (normalized_phone.isdigit() and normalized_phone.startswith("254") and len(normalized_phone) == 12):
                 error = "Enter a valid Kenyan M-Pesa number, for example 0712345678."
             else:
