@@ -24,6 +24,13 @@ main,.container,.card,.panel,form,.content,.box{background-color:rgba(11,19,31,.
 a,button{transition:background-color .15s ease}
 
 </style>
+<style id="tradeon-visible-background">
+html,body{min-height:100%;background:#030712!important}
+body{background-image:radial-gradient(ellipse at 12% 18%,rgba(0,226,150,.25) 0%,transparent 30%),radial-gradient(ellipse at 88% 22%,rgba(0,132,255,.32) 0%,transparent 35%),radial-gradient(ellipse at 50% 100%,rgba(0,70,130,.28) 0%,transparent 45%),linear-gradient(145deg,#030712 0%,#071a2d 48%,#02050b 100%)!important;background-attachment:fixed!important;position:relative}
+body:before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background-image:linear-gradient(rgba(65,160,210,.055) 1px,transparent 1px),linear-gradient(90deg,rgba(65,160,210,.055) 1px,transparent 1px);background-size:36px 36px;mask-image:linear-gradient(to bottom,black,transparent 88%)}
+header,.top,.navbar{background:rgba(3,10,22,.76)!important;backdrop-filter:blur(16px);border-color:rgba(41,220,166,.32)!important}
+.card,.panel,form,.content,.box,.wrap .card,.below-actions,.open-positions{background:rgba(6,17,31,.72)!important;border-color:rgba(74,157,192,.34)!important;box-shadow:0 12px 38px rgba(0,0,0,.24)}
+</style>
 </head>
 <body>
 <div class="wrap">
