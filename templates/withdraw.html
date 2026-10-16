@@ -6,7 +6,7 @@
 <h1>Withdraw funds</h1><p>Request a withdrawal of your available wallet balance to a Kenyan M-Pesa number. Requests are reviewed by TRADEON Manager.</p>
 <div class="note" style="margin-top:0"><b>Available balance</b><h2 style="margin:8px 0;color:#20c997">KSh {{ '%.2f'|format(balance) }}</h2></div>
 {% if error %}<div class="error">{{ error }}</div>{% endif %}{% if message %}<div class="success">{{ message }}</div>{% endif %}
-<form method="post"><label for="amount">Amount to withdraw (KSh)</label><input id="amount" name="amount" type="number" min="0.01" max="{{ balance }}" step="0.01" placeholder="Enter amount in KSh" value="{{ amount }}" required>
+<form method="post"><label for="amount">Amount to withdraw (KSh)</label><p style="margin:0;color:#20c997;font-size:13px">Minimum withdrawal: $100 USD (approximately KSh 13,000)</p><input id="amount" name="amount" type="number" min="13000" max="{{ balance }}" step="1" placeholder="Enter at least KSh 13,000" value="{{ amount }}" required>
 <label for="phone">M-Pesa phone number to receive payment</label><input id="phone" name="phone" type="tel" inputmode="tel" placeholder="0712345678" value="{{ phone }}" required>
 <button class="main" type="submit">Submit withdrawal request</button></form>
 <div class="note"><b>Processing time:</b> Withdrawals may take a minimum of 15 minutes to process.</div>
