@@ -230,10 +230,11 @@ async function loadChart(){
  if(note)note.textContent='TRADEON custom chart · Binance market data';
  const interval=({'1m':'1m','5m':'5m','15m':'15m','1h':'1h','4h':'4h','1d':'1d'})[chartInterval]||'1m';
  try{
-  const url='https://api.binance.com/api/v3/klines?symbol='+encodeURIComponent(currentSymbol)+'&interval='+interval+'&limit=100';
+  const url='/api/market/history?symbol='+encodeURIComponent(currentSymbol)+'&interval='+interval;
   const response=await fetch(url,{cache:'no-store'});
-  if(!response.ok)throw new Error('Binance candles unavailable ('+response.status+')');
-  const rows=chartRowsFromKlines(await response.json());
+  if(!response.ok)throw new Error('Market candles unavailable ('+response.status+')');
+  const payload=await response.json();
+  const rows=(payload.points||[]).map(k=>({time:Number(k.time),open:Number(k.open),high:Number(k.high),low:Number(k.low),close:Number(k.close)})).filter(k=>k.time&&k.open>0&&k.high>0&&k.low>0&&k.close>0);
   if(token!==chartLoadToken)return;
   if(!rows.length)throw new Error('No candle data returned');
   customCandles=rows;
@@ -254,9 +255,10 @@ async function pollLatestCandle(){
  if(candlePollBusy)return;candlePollBusy=true;
  try{
   const interval=({'1m':'1m','5m':'5m','15m':'15m','1h':'1h'})[chartInterval]||'1m';
-  const response=await fetch('https://api.binance.com/api/v3/klines?symbol='+encodeURIComponent(currentSymbol)+'&interval='+interval+'&limit=2',{cache:'no-store'});
+  const response=await fetch('/api/market/history?symbol='+encodeURIComponent(currentSymbol)+'&interval='+interval,{cache:'no-store'});
   if(!response.ok)throw Error('Candle polling failed');
-  const rows=chartRowsFromKlines(await response.json());if(!rows.length)return;
+  const payload=await response.json();
+  const rows=(payload.points||[]).map(k=>({time:Number(k.time),open:Number(k.open),high:Number(k.high),low:Number(k.low),close:Number(k.close)})).filter(k=>k.time&&k.open>0&&k.high>0&&k.low>0&&k.close>0);if(!rows.length)return;
   const latest=rows[rows.length-1];
   const last=customCandles.length?customCandles[customCandles.length-1]:null;
   if(last&&last.time===latest.time){Object.assign(last,latest)}
