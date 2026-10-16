@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>TRADEON Trades</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#1d2132;color:#f0f3fb;font-family:Arial,sans-serif;padding-bottom:85px}
+header{height:72px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 14px;background:#1d2132;border-bottom:1px solid #30364a;position:sticky;top:0;z-index:3}
+.brand{font-weight:900;font-size:19px;letter-spacing:.4px}.brand span{color:#37c768}.balance{background:#252a3d;border:1px solid #34394d;border-radius:12px;padding:9px 12px;min-width:132px;text-align:right}.balance small{display:block;color:#aab4ca;font-size:10px;margin-bottom:3px}.balance strong{font-size:18px;font-weight:800}
+main{max-width:780px;margin:auto;padding:15px 12px 25px}.page-title{font-size:21px;margin:5px 0 4px}.subtle{color:#a6b0c6;font-size:12px;line-height:1.5;margin:0 0 16px}
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:5px;background:#252a3d;border-radius:12px;margin:12px 0}.tab{border:0;border-radius:9px;padding:12px 8px;background:transparent;color:#aeb8ce;font-weight:800;font-size:14px}.tab.active{background:#353c54;color:#fff}
+.list{display:grid;gap:9px}.trade-row{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:10px;align-items:center;background:#252a3d;border:1px solid #30364b;border-radius:13px;padding:12px 10px}
+.trade-icon{width:35px;height:35px;border-radius:50%;display:grid;place-items:center;font-size:14px;font-weight:900}.trade-icon.up{background:#1d5538;color:#4bd775}.trade-icon.down{background:#5b292d;color:#ff7777}
+.trade-main{min-width:0}.trade-pair{font-size:13px;font-weight:800;overflow-wrap:anywhere}.trade-pair span{display:inline-block;color:#b3bdd1;font-size:10px;font-weight:600;margin-left:4px}.trade-meta{font-size:10px;color:#aab4ca;margin-top:5px;overflow-wrap:anywhere}
+.trade-values{display:flex;flex-direction:column;align-items:flex-end;gap:5px;white-space:nowrap}.trade-values strong{font-size:14px}.trade-values span{font-size:12px;font-weight:800}.trade-values small{font-size:10px;color:#aab4ca}
+.positive{color:#47d36c}.negative{color:#ff6666}.status-pill{grid-column:2/4;justify-self:start;font-size:9px;font-weight:800;padding:4px 7px;border-radius:20px}.status-pill.open{background:#173d31;color:#65df9b}.status-pill.closed{background:#34394d;color:#c3cbe0}
+.empty{text-align:center;padding:35px 14px;background:#252a3d;border-radius:12px;color:#aab4ca;font-size:13px}.notice{padding:10px;border-radius:8px;background:#173d31;color:#8df0b5;font-size:12px;margin-bottom:10px}
+.bottom-nav{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:2px;padding:6px 5px calc(6px + env(safe-area-inset-bottom,0px));background:#1d2132;border-top:1px solid #30364a}.bottom-nav a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:50px;color:#aab5cb;text-decoration:none;font-size:10px;text-align:center}.bottom-nav a.active{color:#f4f6fc}.bottom-nav span{font-size:20px;color:#aab5cb}.bottom-nav a.active span{color:#57a9ff}
+@media(max-width:380px){header{padding:8px}.brand{font-size:17px}.balance{min-width:120px;padding:8px}.balance strong{font-size:16px}main{padding:12px 8px}.trade-row{gap:7px;padding:10px 8px}.trade-pair{font-size:12px}.trade-values strong{font-size:13px}}
+</style></head><body>
+<header><div class="brand">TRADE<span>ON</span></div><div class="balance"><small>Available now · USD</small><strong>$ {{ "{:,.2f}".format(demo_balance) }}</strong></div></header>
+<main><h1 class="page-title">Trades</h1><p class="subtle">Your demo trades and settlement history. Amounts and results are shown in USD.</p>
+{% if notice %}<p class="notice">{{ notice }}</p>{% endif %}
+<div class="tabs" role="tablist"><button class="tab active" id="openedTab" onclick="showTrades('OPEN',this)">Opened</button><button class="tab" id="closedTab" onclick="showTrades('CLOSED',this)">Closed</button></div>
+<section class="list" id="tradeList">
+{% for trade in trades %}{% set side = (trade.side or '')|upper %}{% set status = (trade.status or 'OPEN')|upper %}{% set pnl = trade.pnl|float %}{% set amount = trade.amount|float %}
+<article class="trade-row" data-status="{{ status }}"><div class="trade-icon {{ 'up' if side in ['UP','BUY'] else 'down' }}">{{ '▲' if side in ['UP','BUY'] else '▼' }}</div>
+<div class="trade-main"><div class="trade-pair">{{ trade.pair }} <span>{{ (trade.duration_seconds|string + 's') if trade.duration_seconds else ('Fixed time' if trade.mode|upper == 'DURATION' else 'Spot') }}</span></div>
+<div class="trade-meta">{{ side }} · {{ trade.closed_at if status != 'OPEN' and trade.closed_at else trade.created_at }}</div><div class="trade-meta">Entry ${{ '{:,.5f}'.format(trade.entry_price) }}</div></div>
+<div class="trade-values"><strong>${{ '{:,.2f}'.format(amount) }}</strong><span class="{{ 'positive' if pnl >= 0 else 'negative' }}">{{ '+' if pnl > 0 else '' }}${{ '{:,.2f}'.format(pnl) }}</span><small>{{ 'Payout' if status != 'OPEN' else 'Reserved' }} ${{ '{:,.2f}'.format([0, amount + pnl]|max) }}</small></div>
+<span class="status-pill {{ 'open' if status == 'OPEN' else 'closed' }}">{{ 'Opened' if status == 'OPEN' else 'Completed' }}</span></article>{% endfor %}
+{% if not trades %}<div class="empty" id="emptyFiltered">No trades yet. Your trades will appear here after you place one.</div>{% else %}<div class="empty" id="emptyFiltered" style="display:none"></div>{% endif %}
+</section><p class="subtle" style="margin-top:14px">Demo trading only. No real-money order is placed from this page.</p></main>
+<nav class="bottom-nav" aria-label="Main sections"><a class="active" href="/trades"><span>↕</span>Trades</a><a href="/signals"><span>◈</span>Insights</a><a href="/trade"><span>⌁</span>Buy/Sell</a><a href="/social-trading"><span>◎</span>Social Trading</a><a href="/deposit"><span>＋</span>More</a></nav>
+<script>
+function showTrades(which,button){document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active')});button.classList.add('active');var shown=0;document.querySelectorAll('.trade-row').forEach(function(row){var status=(row.dataset.status||'').toUpperCase();var match=which==='OPEN'?status==='OPEN':status!=='OPEN';row.style.display=match?'grid':'none';if(match)shown++});var empty=document.getElementById('emptyFiltered');empty.style.display=shown?'none':'block';empty.textContent=which==='OPEN'?'No open trades right now.':'No completed trades yet.'}
+showTrades('OPEN',document.getElementById('openedTab'));
+</script></body></html>
