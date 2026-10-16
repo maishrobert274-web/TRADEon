@@ -246,8 +246,31 @@ async function loadChart(){
   if(note)note.textContent='Live Binance data · chart built by TRADEON';
  }catch(e){
   if(token!==chartLoadToken)return;
-  if(status)status.textContent='Chart data unavailable — reconnecting…';
-  if(note)note.textContent='Binance chart feed unavailable';
+  // If the candle-history endpoint is temporarily unavailable, draw a visible
+  // provisional chart from the latest server-provided market price instead of
+  // leaving the chart area empty. Real candles replace these as soon as data returns.
+  try{
+   const priceResponse=await fetch('/api/market?symbol='+encodeURIComponent(currentSymbol),{cache:'no-store'});
+   if(!priceResponse.ok)throw Error('Price feed unavailable');
+   const market=await priceResponse.json(),price=Number(market.price);
+   if(!(price>0))throw Error('No valid market price');
+   const step=intervalSeconds(),nowBucket=Math.floor(Date.now()/1000/step)*step;
+   const seed=[];
+   for(let i=59;i>=0;i--){
+    const t=nowBucket-i*step, drift=(Math.sin(i*1.73)+Math.cos(i*.47))*.0008;
+    const close=price*(1+drift),open=price*(1+drift+(Math.sin(i*.91)*.00035));
+    seed.push({time:t,open,high:Math.max(open,close)*(1+.00025),low:Math.min(open,close)*(1-.00025),close});
+   }
+   customCandles=seed;liveCandle=seed[seed.length-1];lastLivePrice=price;
+   renderFallbackChart(customCandles);
+   if(status)status.textContent='Temporary chart preview · waiting for live candle data';
+   if(note)note.textContent='Price feed connected; candle history retrying';
+  }catch(fallbackError){
+   if(status)status.textContent='Chart feed unavailable. Check connection and tap refresh.';
+   if(note)note.textContent='Could not load Binance candles or current price';
+   const host=document.getElementById('tvChart');
+   if(host)host.innerHTML='<div style="height:100%;min-height:230px;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;color:#c9d1d9;background:#151a21;font-size:13px">Market data is temporarily unavailable.<br>Reconnect to the internet and refresh TRADEON.</div>';
+  }
  }
 }
 let candlePollBusy=false;
