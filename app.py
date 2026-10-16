@@ -160,12 +160,19 @@ def deposit():
     error = None
     message = None
     amount = request.form.get("amount", "").strip() if request.method == "POST" else ""
+    amount_usd = request.form.get("amount_usd", "").strip() if request.method == "POST" else ""
     phone = request.form.get("phone", "").strip() if request.method == "POST" else ""
     if request.method == "POST":
         pasted = " ".join(request.form.get("mpesa_message", "").split()).strip()
         try:
+            usd_value = round(float(amount_usd), 2)
             value = round(float(amount), 2)
-            if value < 1300 or value > 150000:
+            expected_kes = round(usd_value * 130)
+            if usd_value < 10:
+                error = "The minimum deposit is $10.00 USD."
+            elif usd_value > 1153.84 or value != expected_kes:
+                error = "The USD amount and estimated M-Pesa amount do not match. Please refresh and try again."
+            elif value < 1300 or value > 150000:
                 error = "The minimum deposit is $10 USD (approximately KSh 1,300). Enter KSh 1,300 to KSh 150,000."
             elif len(pasted) < 10 or len(pasted) > 1200:
                 error = "Paste the full M-Pesa confirmation message."
