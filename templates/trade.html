@@ -185,6 +185,27 @@ async function loadChart(){
   if(note)note.textContent='Binance chart feed unavailable';
  }
 }
+let candlePollBusy=false;
+async function pollLatestCandle(){
+ if(candlePollBusy)return;candlePollBusy=true;
+ try{
+  const interval=({'1m':'1m','5m':'5m','15m':'15m','1h':'1h'})[chartInterval]||'1m';
+  const response=await fetch('https://api.binance.com/api/v3/klines?symbol='+encodeURIComponent(currentSymbol)+'&interval='+interval+'&limit=2',{cache:'no-store'});
+  if(!response.ok)throw Error('Candle polling failed');
+  const rows=chartRowsFromKlines(await response.json());if(!rows.length)return;
+  const latest=rows[rows.length-1];
+  const last=customCandles.length?customCandles[customCandles.length-1]:null;
+  if(last&&last.time===latest.time){Object.assign(last,latest)}
+  else{customCandles.push(latest);if(customCandles.length>180)customCandles.shift()}
+  liveCandle=latest;lastLivePrice=latest.close;
+  const priceEl=document.getElementById('price');if(priceEl)priceEl.textContent=fmt(latest.close);
+  const closeAt=(latest.time+intervalSeconds())*1000;candleCloseAt=closeAt;updateCandleClock();
+  renderFallbackChart(customCandles);
+  const status=document.getElementById('chartStatus');if(status)status.textContent='TRADEON live candlesticks · '+currentPair+' · '+chartInterval;
+  const note=document.getElementById('feedNote');if(note)note.textContent='Live Binance candle updates';
+ }catch(e){const note=document.getElementById('feedNote');if(note)note.textContent='Reconnecting to live candle feed…'}
+ finally{candlePollBusy=false}
+}
 async function loadOpenPositions(){
  const list=document.getElementById('openPositionsList');if(!list)return;
  try{
@@ -221,6 +242,6 @@ async function placeTrade(side){
  }catch(e){status.textContent=e.message||'Could not record demo order.'}
  finally{orderPending=false;buttons.forEach(b=>{b.disabled=false;b.style.opacity='1'})}
 }
-loadPrice();setTimeout(loadChart,250);setTimeout(connectLiveKline,500);loadOpenPositions();if(!candleClockTimer)candleClockTimer=setInterval(updateCandleClock,250);setInterval(settleDue,2000);setInterval(loadPrice,2000);setInterval(loadOpenPositions,10000);window.addEventListener('resize',()=>{if(customCandles.length)renderFallbackChart(customCandles)});
+loadPrice();setTimeout(loadChart,250);setTimeout(connectLiveKline,500);setTimeout(pollLatestCandle,900);loadOpenPositions();if(!candleClockTimer)candleClockTimer=setInterval(updateCandleClock,250);setInterval(pollLatestCandle,2500);setInterval(settleDue,2000);setInterval(loadPrice,2000);setInterval(loadOpenPositions,10000);window.addEventListener('resize',()=>{if(customCandles.length)renderFallbackChart(customCandles)});
 </script>
 </body></html>
