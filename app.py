@@ -27,6 +27,7 @@ def init_db():
         if "mpesa_message" not in deposit_cols:
             con.execute("ALTER TABLE deposits ADD COLUMN mpesa_message TEXT")
         con.execute("""CREATE TABLE IF NOT EXISTS wallets (user_id INTEGER PRIMARY KEY, balance REAL NOT NULL DEFAULT 0)""")
+        con.execute("""CREATE TABLE IF NOT EXISTS withdrawals (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, amount REAL NOT NULL, phone TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'PENDING', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, reviewed_at TEXT, reviewed_by TEXT)""")
         con.execute("""CREATE TABLE IF NOT EXISTS demo_wallets (user_id INTEGER PRIMARY KEY, balance REAL NOT NULL DEFAULT 10000)""")
         con.execute("""CREATE TABLE IF NOT EXISTS trades (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, pair TEXT NOT NULL, side TEXT NOT NULL, amount REAL NOT NULL, entry_price REAL NOT NULL, status TEXT NOT NULL DEFAULT "OPEN", pnl REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, closed_at TEXT)""")
         trade_cols = [r[1] for r in con.execute("PRAGMA table_info(trades)").fetchall()]
@@ -827,6 +828,92 @@ def wallet():
         ).fetchall()
         user = con.execute("SELECT name,phone,country FROM users WHERE id=?", (session["user_id"],)).fetchone()
     return render_template("wallet.html", balance=balance, deposits=deposits, adjustments=adjustments, user_name=user[0] if user else "", phone=user[1] if user else "", country=user[2] if user else "Kenya")
+
+
+@app.route("/withdraw", methods=["GET", "POST"])
+def withdraw():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    error = message = None
+    amount = ""
+    with sqlite3.connect(DB) as con:
+        con.execute("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)", (session["user_id"],))
+        balance = float(con.execute("SELECT balance FROM wallets WHERE user_id=?", (session["user_id"],)).fetchone()[0])
+        user = con.execute("SELECT phone FROM users WHERE id=?", (session["user_id"],)).fetchone()
+    phone = user[0] if user else ""
+    if request.method == "POST":
+        amount = request.form.get("amount", "").strip()
+        phone = request.form.get("phone", "").strip()
+        try:
+            value = round(float(amount), 2)
+            normalized_phone = normalize_phone(phone).replace("+", "")
+            if value <= 0 or value > balance:
+                error = "Enter an amount above KSh 0 and no greater than your available balance."
+            elif not (normalized_phone.isdigit() and normalized_phone.startswith("254") and len(normalized_phone) == 12):
+                error = "Enter a valid Kenyan M-Pesa number, for example 0712345678."
+            else:
+                with sqlite3.connect(DB) as con:
+                    con.execute("BEGIN IMMEDIATE")
+                    current = con.execute("SELECT balance FROM wallets WHERE user_id=?", (session["user_id"],)).fetchone()
+                    current_balance = float(current[0]) if current else 0
+                    if value > current_balance:
+                        error = "Your available balance changed. Refresh and try again."
+                    else:
+                        new_balance = round(current_balance - value, 2)
+                        con.execute("UPDATE wallets SET balance=? WHERE user_id=?", (new_balance, session["user_id"]))
+                        cur = con.execute("INSERT INTO withdrawals (user_id,amount,phone,status) VALUES (?,?,?,'PENDING')", (session["user_id"], value, normalized_phone))
+                        con.execute("INSERT INTO wallet_transactions (user_id,admin_username,transaction_type,amount,balance_after,reason) VALUES (?,?,?,?,?,?)", (session["user_id"], "SYSTEM", "WITHDRAWAL_REQUEST", value, new_balance, "Withdrawal request #" + str(cur.lastrowid) + " reserved pending Manager review"))
+                        message = "Request submitted. KSh " + format(value, ",.2f") + " is reserved pending Manager review. Approval does not send money automatically; the Manager must complete the M-Pesa payout."
+                        amount = ""
+                        phone = normalized_phone
+        except (ValueError, TypeError):
+            error = "Enter a valid withdrawal amount."
+    with sqlite3.connect(DB) as con:
+        history = con.execute("SELECT amount,phone,status,created_at FROM withdrawals WHERE user_id=? ORDER BY id DESC LIMIT 20", (session["user_id"],)).fetchall()
+        current = con.execute("SELECT balance FROM wallets WHERE user_id=?", (session["user_id"],)).fetchone()
+        balance = float(current[0]) if current else 0
+    return render_template("withdraw.html", error=error, message=message, amount=amount, phone=phone, balance=balance, history=history)
+
+
+@app.route("/manager/withdrawals")
+def manager_withdrawals():
+    if not admin_required():
+        return redirect(url_for("manager_login"))
+    with sqlite3.connect(DB) as con:
+        con.row_factory = sqlite3.Row
+        rows = con.execute("SELECT w.id,u.name,w.amount,w.phone,w.status,w.created_at FROM withdrawals w JOIN users u ON u.id=w.user_id ORDER BY CASE WHEN w.status='PENDING' THEN 0 ELSE 1 END,w.id DESC LIMIT 200").fetchall()
+    html_rows = []
+    for row in rows:
+        review = ""
+        if row["status"] == "PENDING":
+            review = "<form method='post' action='/manager/withdrawals/" + str(row["id"]) + "/review'><button name='action' value='APPROVE'>Approve for payout</button> <button name='action' value='REJECT'>Reject & refund</button></form>"
+        html_rows.append("<tr><td>{}</td><td>{}</td><td>KSh {:,.2f}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(row["id"], html.escape(str(row["name"])), row["amount"], html.escape(str(row["phone"])), html.escape(str(row["status"])), html.escape(str(row["created_at"])), review))
+    return "<!doctype html><html><meta name='viewport' content='width=device-width,initial-scale=1'><title>TRADEON withdrawals</title><style>body{font-family:Arial;background:#07111f;color:white;padding:16px}a{color:#20c997}table{border-collapse:collapse;width:100%}td,th{padding:9px;border:1px solid #344a63}button{padding:8px;margin:3px}.scroll{overflow:auto}</style><h1>Withdrawal requests</h1><p>Approval marks a request ready for manual M-Pesa payout; it does not send money automatically. Rejection refunds the reserved amount.</p><p><a href='/manager'>Manager dashboard</a> · <a href='/manager/wallets'>Manage wallets</a></p><div class='scroll'><table><tr><th>ID</th><th>User</th><th>Amount</th><th>M-Pesa phone</th><th>Status</th><th>Date</th><th>Review</th></tr>" + ("".join(html_rows) or "<tr><td colspan='7'>No withdrawal requests.</td></tr>") + "</table></div></html>"
+
+
+@app.route("/manager/withdrawals/<int:withdrawal_id>/review", methods=["POST"])
+def manager_review_withdrawal(withdrawal_id):
+    if not admin_required():
+        return redirect(url_for("manager_login"))
+    action = request.form.get("action", "").upper()
+    admin_name = os.environ.get("ADMIN_USERNAME", "admin")
+    with sqlite3.connect(DB) as con:
+        con.row_factory = sqlite3.Row
+        con.execute("BEGIN IMMEDIATE")
+        row = con.execute("SELECT id,user_id,amount,status FROM withdrawals WHERE id=?", (withdrawal_id,)).fetchone()
+        if not row or row["status"] != "PENDING":
+            return redirect(url_for("manager_withdrawals"))
+        if action == "REJECT":
+            con.execute("UPDATE wallets SET balance=balance+? WHERE user_id=?", (row["amount"], row["user_id"]))
+            balance = con.execute("SELECT balance FROM wallets WHERE user_id=?", (row["user_id"],)).fetchone()[0]
+            con.execute("INSERT INTO wallet_transactions (user_id,admin_username,transaction_type,amount,balance_after,reason) VALUES (?,?,?,?,?,?)", (row["user_id"], admin_name, "WITHDRAWAL_REFUND", row["amount"], balance, "Rejected withdrawal #" + str(withdrawal_id) + "; amount refunded"))
+            con.execute("UPDATE withdrawals SET status='REJECTED',reviewed_at=CURRENT_TIMESTAMP,reviewed_by=? WHERE id=? AND status='PENDING'", (admin_name, withdrawal_id))
+        elif action == "APPROVE":
+            con.execute("UPDATE withdrawals SET status='APPROVED_FOR_PAYOUT',reviewed_at=CURRENT_TIMESTAMP,reviewed_by=? WHERE id=? AND status='PENDING'", (admin_name, withdrawal_id))
+            balance = con.execute("SELECT balance FROM wallets WHERE user_id=?", (row["user_id"],)).fetchone()[0]
+            con.execute("INSERT INTO wallet_transactions (user_id,admin_username,transaction_type,amount,balance_after,reason) VALUES (?,?,?,?,?,?)", (row["user_id"], admin_name, "WITHDRAWAL_APPROVED", row["amount"], balance, "Withdrawal #" + str(withdrawal_id) + " approved for manual M-Pesa payout"))
+    return redirect(url_for("manager_withdrawals"))
+
 
 @app.route("/transactions")
 def transactions():
