@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Deposit KSh - TRADEON</title>
+<title>Deposit USD - TRADEON</title>
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#07111f;color:#fff}
 .wrap{max-width:520px;margin:auto;padding:20px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:25px}
@@ -21,19 +21,19 @@ label{display:block;margin:20px 0 8px;font-weight:700}input{width:100%;padding:1
 <div class="wrap">
 <div class="top"><div class="logo">TRADEON</div><a class="back" href="/">← Dashboard</a></div>
 <div class="card">
-<h1>Deposit KSh</h1>
-<p>Pay using M-Pesa to Co-op Bank, then paste the full confirmation message below. Your wallet is credited only after the Manager verifies it.</p>
+<h1>Deposit USD</h1>
+<p>Minimum deposit: <strong style="color:#fff">$10 USD</strong> (approximately <strong style="color:#fff">KSh 1,300</strong>). M-Pesa payments are sent in KSh, so enter the KSh amount shown in your M-Pesa confirmation. Your wallet is credited after the Manager verifies the receipt.</p>
 {% if error %}<div class="error">{{ error }}</div>{% endif %}
 {% if message %}<div class="success">{{ message }}</div>{% endif %}
 <div class="note" style="margin-bottom:16px"><b>Payment details</b><p style="margin:8px 0;color:#fff">PayBill: <strong>400200</strong><br>Account number: <strong>25411127766001</strong></p><p style="margin:0">Open M-Pesa → Lipa na M-Pesa → PayBill, enter the details above and pay the amount you enter below.</p></div>
 <form method="post">
-<label for="amount">Amount sent (KSh)</label>
-<input id="amount" name="amount" type="number" min="10" max="150000" step="1" placeholder="Enter amount" value="{{ amount }}" required>
+<label for="amount">Amount to send in M-Pesa (KSh)</label>
+<input id="amount" name="amount" type="number" min="1300" max="150000" step="1" placeholder="Minimum KSh 1,300" value="{{ amount }}" required>
 <div class="quick">
-<button type="button" onclick="document.getElementById('amount').value=30">30</button>
-<button type="button" onclick="document.getElementById('amount').value=100">100</button>
-<button type="button" onclick="document.getElementById('amount').value=500">500</button>
-<button type="button" onclick="document.getElementById('amount').value=1000">1,000</button>
+<button type="button" onclick="document.getElementById('amount').value=1300">≈ $10 · 1,300</button>
+<button type="button" onclick="document.getElementById('amount').value=2600">≈ $20 · 2,600</button>
+<button type="button" onclick="document.getElementById('amount').value=6500">≈ $50 · 6,500</button>
+<button type="button" onclick="document.getElementById('amount').value=13000">≈ $100 · 13,000</button>
 </div>
 <label for="phone">M-Pesa phone number used (optional)</label><input id="phone" name="phone" type="tel" inputmode="numeric" placeholder="07XXXXXXXX" value="{{ phone or '' }}">
 <label for="mpesa_message">Paste the full M-Pesa confirmation message</label><textarea id="mpesa_message" name="mpesa_message" rows="5" maxlength="1200" placeholder="Paste the SMS confirmation here" required style="width:100%;padding:14px;border-radius:12px;border:1px solid #344a63;background:#081522;color:#fff;font-size:15px"></textarea>
