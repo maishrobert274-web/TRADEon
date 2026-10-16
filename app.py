@@ -277,12 +277,13 @@ def api_open_trades():
         return {"error": "login required"}, 401
     with sqlite3.connect(DB) as con:
         rows = con.execute(
-            "SELECT id,pair,side,amount,entry_price,mode,created_at FROM trades WHERE user_id=? AND status='OPEN' ORDER BY id DESC LIMIT 50",
+            "SELECT id,pair,side,amount,entry_price,mode,created_at,duration_seconds,expires_at,status FROM trades WHERE user_id=? AND status='OPEN' ORDER BY id DESC LIMIT 50",
             (session["user_id"],)
         ).fetchall()
     return {"trades": [
         {"id": r[0], "pair": r[1], "side": r[2], "amount": float(r[3]),
-         "entry_price": float(r[4]), "mode": r[5], "created_at": r[6]}
+         "entry_price": float(r[4]), "mode": r[5], "created_at": r[6],
+         "duration_seconds": int(r[7] or 0), "expires_at": r[8], "status": r[9]}
         for r in rows
     ]}
 
