@@ -14,7 +14,14 @@ main{max-width:780px;margin:auto;padding:15px 12px 25px}.page-title{font-size:21
 .empty{text-align:center;padding:35px 14px;background:#252a3d;border-radius:12px;color:#aab4ca;font-size:13px}.notice{padding:10px;border-radius:8px;background:#173d31;color:#8df0b5;font-size:12px;margin-bottom:10px}
 .bottom-nav{position:fixed;left:0;right:0;bottom:0;z-index:20;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:2px;padding:6px 5px calc(6px + env(safe-area-inset-bottom,0px));background:#1d2132;border-top:1px solid #30364a}.bottom-nav a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:50px;color:#aab5cb;text-decoration:none;font-size:10px;text-align:center}.bottom-nav a.active{color:#f4f6fc}.bottom-nav span{font-size:20px;color:#aab5cb}.bottom-nav a.active span{color:#57a9ff}
 @media(max-width:380px){header{padding:8px}.brand{font-size:17px}.balance{min-width:120px;padding:8px}.balance strong{font-size:16px}main{padding:12px 8px}.trade-row{gap:7px;padding:10px 8px}.trade-pair{font-size:12px}.trade-values strong{font-size:13px}}
-</style></head><body>
+</style><style id="tradeon-sitewide-background">
+html,body{min-height:100%;background:#030712!important}
+body{background-image:url('/static/tradeon-background.svg')!important;background-repeat:no-repeat!important;background-position:center center!important;background-size:cover!important;background-attachment:fixed!important}
+body:before{content:none!important}
+header,.top,.navbar,nav{background:rgba(3,10,22,.78)!important;backdrop-filter:blur(16px);border-color:rgba(41,220,166,.32)!important}
+.card,.panel,form,.content,.box,.wrap .card,.below-actions,.open-positions,main,.container{background-color:rgba(6,17,31,.72);border-color:rgba(74,157,192,.34)}
+</style>
+</head><body>
 <header><div class="brand">TRADE<span>ON</span></div><div class="balance"><small>Available now · USD</small><strong>$ {{ "{:,.2f}".format(demo_balance) }}</strong></div></header>
 <main><h1 class="page-title">Trades</h1><p class="subtle">Your demo trades and settlement history. Amounts and results are shown in USD.</p>
 {% if notice %}<p class="notice">{{ notice }}</p>{% endif %}
