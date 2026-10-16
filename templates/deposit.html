@@ -26,15 +26,16 @@ label{display:block;margin:20px 0 8px;font-weight:700}input{width:100%;padding:1
 {% if error %}<div class="error">{{ error }}</div>{% endif %}
 {% if message %}<div class="success">{{ message }}</div>{% endif %}
 <div class="note" style="margin-bottom:16px"><b>Payment details</b><p style="margin:8px 0;color:#fff">PayBill: <strong>400200</strong><br>Account number: <strong>25411127766001</strong></p><p style="margin:0">Open M-Pesa → Lipa na M-Pesa → PayBill, enter the details above and pay the amount you enter below.</p></div>
-<form method="post">
-<label for="amount">Amount to send in M-Pesa (KSh)</label>
-<input id="amount" name="amount" type="number" min="1300" max="150000" step="1" placeholder="Minimum KSh 1,300" value="{{ amount }}" oninput="updateDepositEstimate()" required>
-<p id="usd-estimate" style="margin:8px 0;color:#20c997;font-weight:700">Estimated USD value: $0.00 USD</p>
+<form method="post" onsubmit="updateDepositEstimate()">
+<label for="amount_usd">Deposit amount (USD)</label>
+<input id="amount_usd" name="amount_usd" type="number" min="10" max="1153" step="0.01" placeholder="Minimum $10.00 USD" value="{{ ('%.2f'|format((amount|float)/130)) if amount else '' }}" oninput="updateDepositEstimate()" required>
+<input id="amount" name="amount" type="hidden" value="{{ amount }}">
+<p id="usd-estimate" style="margin:8px 0;color:#20c997;font-weight:700">You will be prompted to pay approximately KSh 1,300 by M-Pesa for $10.00 USD.</p>
 <div class="quick">
-<button type="button" onclick="document.getElementById('amount').value=1300;updateDepositEstimate()">≈ $10 · 1,300</button>
-<button type="button" onclick="document.getElementById('amount').value=2600;updateDepositEstimate()">≈ $20 · 2,600</button>
-<button type="button" onclick="document.getElementById('amount').value=6500;updateDepositEstimate()">≈ $50 · 6,500</button>
-<button type="button" onclick="document.getElementById('amount').value=13000;updateDepositEstimate()">≈ $100 · 13,000</button>
+<button type="button" onclick="document.getElementById('amount_usd').value='10';updateDepositEstimate()"> $10 USD </button>
+<button type="button" onclick="document.getElementById('amount_usd').value='20';updateDepositEstimate()"> $20 USD </button>
+<button type="button" onclick="document.getElementById('amount_usd').value='50';updateDepositEstimate()"> $50 USD </button>
+<button type="button" onclick="document.getElementById('amount_usd').value='100';updateDepositEstimate()"> $100 USD </button>
 </div>
 <label for="phone">M-Pesa phone number used (optional)</label><input id="phone" name="phone" type="tel" inputmode="numeric" placeholder="07XXXXXXXX" value="{{ phone or '' }}">
 <label for="mpesa_message">Paste the full M-Pesa confirmation message</label><textarea id="mpesa_message" name="mpesa_message" rows="5" maxlength="1200" placeholder="Paste the SMS confirmation here" required style="width:100%;padding:14px;border-radius:12px;border:1px solid #344a63;background:#081522;color:#fff;font-size:15px"></textarea>
@@ -45,14 +46,20 @@ label{display:block;margin:20px 0 8px;font-weight:700}input{width:100%;padding:1
 </div>
 <nav class="bottom-nav" aria-label="Main sections"><a href="/trades"><span>↔</span>Trades</a><a href="/signals"><span>◈</span>Insights</a><a href="/trade"><span>⌁</span>Buy/Sell</a><a href="/social-trading"><span>◎</span>Social Trading</a><a href="/deposit"><span>＋</span>Deposit</a></nav>
 <script>
+const KES_PER_USD = 130; // Approximate display rate; update when your chosen rate changes.
 function updateDepositEstimate(){
-  const field=document.getElementById('amount');
+  const usdField=document.getElementById('amount_usd');
+  const kesField=document.getElementById('amount');
   const label=document.getElementById('usd-estimate');
-  const kes=Number(field.value);
-  if(!Number.isFinite(kes)||kes<=0){label.textContent='Estimated USD value: $0.00 USD';return;}
-  const usd=kes/130;
-  label.textContent='Estimated USD value: 
-</html>+usd.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' USD (using approx. KSh 130 per $1)';
+  const usd=Number(usdField.value);
+  if(!Number.isFinite(usd)||usd<10){
+    kesField.value='';
+    label.textContent='Minimum deposit: $10.00 USD. You will pay approximately KSh 1,300 by M-Pesa.';
+    return;
+  }
+  const kes=Math.round(usd*KES_PER_USD);
+  kesField.value=String(kes);
+  label.textContent='M-Pesa amount to pay: KSh '+kes.toLocaleString('en-KE')+' (estimated for $'+usd.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' USD, at KSh 130 per $1).';
 }
 updateDepositEstimate();
 </script>
