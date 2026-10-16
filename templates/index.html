@@ -43,6 +43,8 @@ header,.top,.navbar,nav{background:rgba(3,10,22,.78)!important;backdrop-filter:b
 <nav class="bottom"><a href="/"><b>⌂</b>Home</a><a href="/trades"><b>⇄</b>Trades</a><a href="/deposit"><b>＋</b>Deposit</a><a href="/signals"><b>◈</b>Signals</a></nav>
 <script>
 let currentSymbol='BTCUSDT';
+let latestPrice=0;
+let openChartTrades=[];
 function setAmount(value){document.getElementById('amount').value=value}
 function setPair(button){
  currentSymbol=button.dataset.symbol;
@@ -57,6 +59,7 @@ async function loadPrice(){
   const response=await fetch('/api/market?symbol='+encodeURIComponent(currentSymbol));
   const data=await response.json();
   if(!response.ok) throw new Error(data.error||'Unavailable');
+  latestPrice=Number(data.price)||0;
   price.textContent=Number(data.price).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:8});
   const change=Number(data.change_percent);
   changeEl.textContent=(change>=0?'+':'')+change.toFixed(2)+'%';
@@ -100,6 +103,100 @@ async function loadChart(){
    ctx.fillRect(x-bodyW/2,top,bodyW,bh);
   });
   const last=candles[candles.length-1],lastPrice=Number(last.close),lastY=y(lastPrice);
+  try{
+   const tr=await fetch('/api/trades/open');
+   const td=await tr.json();
+   openChartTrades=tr.ok&&Array.isArray(td.trades)?td.trades.filter(t=>t.pair===document.getElementById('pair').textContent):[];
+  }catch(_){openChartTrades=[]}
+  const nowMs=Date.now();
+  openChartTrades.forEach((t,i)=>{
+   const entry=Number(t.entry_price);if(!(entry>0))return;
+   const yy=Math.max(pad.t+9,Math.min(pad.t+plotH-9,y(entry)));
+   const isBuy=String(t.side).toUpperCase()==='BUY';
+   const color=isBuy?'#20c997':'#ff5c6c';
+   const expires=t.expires_at?new Date(String(t.expires_at).replace(' ','T')+'Z').getTime():0;
+   const remaining=expires?Math.max(0,Math.ceil((expires-nowMs)/1000)):0;
+   const timer=String(Math.floor(remaining/60)).padStart(2,'0')+':'+String(remaining%60).padStart(2,'0');
+   ctx.setLineDash([3,3]);ctx.strokeStyle=color;ctx.globalAlpha=.8;ctx.beginPath();ctx.moveTo(pad.l,yy);ctx.lineTo(width-pad.r,yy);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;
+   const label=(isBuy?'▲ BUY ':'▼ SELL ')+ '
+  ctx.setLineDash([4,4]);ctx.strokeStyle='#5b9cff';ctx.beginPath();ctx.moveTo(pad.l,lastY);ctx.lineTo(width-pad.r,lastY);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#2459a9';ctx.fillRect(width-pad.r+1,lastY-9,pad.r-3,18);ctx.fillStyle='#fff';ctx.font='bold 10px Arial';ctx.fillText(lastPrice.toLocaleString('en-US',{maximumFractionDigits:2}),width-pad.r+4,lastY+3);
+  const candlePrice=document.getElementById('candlePrice');if(candlePrice)candlePrice.textContent=lastPrice.toLocaleString('en-US',{maximumFractionDigits:8})+' USDT';
+  status.textContent='Source: '+(data.source||'market data')+' · '+candles.length+' candles';
+ }catch(error){
+  const dpr=window.devicePixelRatio||1,width=Math.max(280,canvas.clientWidth),height=Math.max(180,canvas.clientHeight);
+  canvas.width=width*dpr;canvas.height=height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,width,height);
+  ctx.fillStyle='#9aa9bc';ctx.font='13px Arial';ctx.fillText('Candlestick data unavailable',16,35);
+  status.textContent='Could not load candles. Please try again shortly.';
+ }
+}
+async function trade(side){
+ const amount=Number(document.getElementById('amount').value);
+ if(!Number.isFinite(amount)||amount<10){alert('Enter at least KSh 10.');return}
+ const pair=document.getElementById('pair').textContent;
+ try{
+  const response=await fetch('/api/trade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pair,side:side==='BUY'?'UP':'DOWN',amount,mode:'DURATION',duration_seconds:15,entry_price:latestPrice})});
+  const data=await response.json();
+  if(!response.ok){alert(data.error||'Demo order could not be opened.');return}
+  alert('Demo '+side+' order recorded for 
+  window.location.href='/trades';
+ }catch(error){alert('Unable to record the demo order right now.')}
+}
+loadPrice();
+loadChart();
+setInterval(loadPrice,30000);
+setInterval(loadChart,1000);
+window.addEventListener("resize",loadChart);
+</script>
+</body></html>+Number(t.amount).toLocaleString('en-US',{maximumFractionDigits:2})+' '+timer;
+   ctx.font='bold 10px Arial';const labelW=Math.min(pad.r+plotW-8,ctx.measureText(label).width+10);
+   ctx.fillStyle=color;ctx.fillRect(pad.l+2,yy-9,labelW,18);ctx.fillStyle='#07111f';ctx.fillText(label,pad.l+7,yy+3);
+   ctx.fillStyle='#dbeafe';ctx.font='10px Arial';ctx.fillText(entry.toLocaleString('en-US',{maximumFractionDigits:8}),pad.l+7,yy+20<height-pad.b?yy+20:yy-12);
+  });
+  ctx.setLineDash([4,4]);ctx.strokeStyle='#5b9cff';ctx.beginPath();ctx.moveTo(pad.l,lastY);ctx.lineTo(width-pad.r,lastY);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#2459a9';ctx.fillRect(width-pad.r+1,lastY-9,pad.r-3,18);ctx.fillStyle='#fff';ctx.font='bold 10px Arial';ctx.fillText(lastPrice.toLocaleString('en-US',{maximumFractionDigits:2}),width-pad.r+4,lastY+3);
+  const candlePrice=document.getElementById('candlePrice');if(candlePrice)candlePrice.textContent=lastPrice.toLocaleString('en-US',{maximumFractionDigits:8})+' USDT';
+  status.textContent='Source: '+(data.source||'market data')+' · '+candles.length+' candles';
+ }catch(error){
+  const dpr=window.devicePixelRatio||1,width=Math.max(280,canvas.clientWidth),height=Math.max(180,canvas.clientHeight);
+  canvas.width=width*dpr;canvas.height=height*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,width,height);
+  ctx.fillStyle='#9aa9bc';ctx.font='13px Arial';ctx.fillText('Candlestick data unavailable',16,35);
+  status.textContent='Could not load candles. Please try again shortly.';
+ }
+}
+async function trade(side){
+ const amount=Number(document.getElementById('amount').value);
+ if(!Number.isFinite(amount)||amount<10){alert('Enter at least KSh 10.');return}
+ const pair=document.getElementById('pair').textContent;
+ try{
+  const response=await fetch('/api/trade',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pair,side,amount})});
+  const data=await response.json();
+  if(!response.ok){alert(data.error||'Demo order could not be opened.');return}
+  alert('Demo '+side+' order recorded for KSh '+amount.toFixed(2)+'. This is not a live exchange trade.');
+  window.location.href='/trades';
+ }catch(error){alert('Unable to record the demo order right now.')}
+}
+loadPrice();
+loadChart();
+setInterval(loadPrice,30000);
+setInterval(loadChart,60000);
+window.addEventListener("resize",loadChart);
+</script>
+</body></html>+amount.toFixed(2)+'. This is simulated and is not a live exchange order.');
+  window.location.href='/trades';
+ }catch(error){alert('Unable to record the demo order right now.')}
+}
+loadPrice();
+loadChart();
+setInterval(loadPrice,30000);
+setInterval(loadChart,60000);
+window.addEventListener("resize",loadChart);
+</script>
+</body></html>+Number(t.amount).toLocaleString('en-US',{maximumFractionDigits:2})+' '+timer;
+   ctx.font='bold 10px Arial';const labelW=Math.min(pad.r+plotW-8,ctx.measureText(label).width+10);
+   ctx.fillStyle=color;ctx.fillRect(pad.l+2,yy-9,labelW,18);ctx.fillStyle='#07111f';ctx.fillText(label,pad.l+7,yy+3);
+   ctx.fillStyle='#dbeafe';ctx.font='10px Arial';ctx.fillText(entry.toLocaleString('en-US',{maximumFractionDigits:8}),pad.l+7,yy+20<height-pad.b?yy+20:yy-12);
+  });
   ctx.setLineDash([4,4]);ctx.strokeStyle='#5b9cff';ctx.beginPath();ctx.moveTo(pad.l,lastY);ctx.lineTo(width-pad.r,lastY);ctx.stroke();ctx.setLineDash([]);
   ctx.fillStyle='#2459a9';ctx.fillRect(width-pad.r+1,lastY-9,pad.r-3,18);ctx.fillStyle='#fff';ctx.font='bold 10px Arial';ctx.fillText(lastPrice.toLocaleString('en-US',{maximumFractionDigits:2}),width-pad.r+4,lastY+3);
   const candlePrice=document.getElementById('candlePrice');if(candlePrice)candlePrice.textContent=lastPrice.toLocaleString('en-US',{maximumFractionDigits:8})+' USDT';
