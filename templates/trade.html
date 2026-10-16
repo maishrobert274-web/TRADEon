@@ -148,7 +148,7 @@ function chartRowsFromKlines(rows){
 function renderFallbackChart(rows){
  const host=document.getElementById('tvChart');if(!host||!rows||!rows.length)return;
  const width=Math.max(280,host.clientWidth||320),height=Math.max(220,host.clientHeight||260);
- const data=rows.slice(-90),left=8,right=62,top=12,bottom=24,plotW=width-left-right,plotH=height-top-bottom;
+ const data=rows.slice(-45),left=8,right=62,top=12,bottom=24,plotW=width-left-right,plotH=height-top-bottom;
  const hi=Math.max(...data.map(x=>x.high)),lo=Math.min(...data.map(x=>x.low)),range=(hi-lo)||Math.max(1,hi*0.0005);
  const y=v=>top+(hi-v)/range*plotH,step=plotW/data.length,cw=Math.max(2,Math.min(9,step*.62));
  let svg='<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 '+width+' '+height+'" preserveAspectRatio="none" style="display:block;background:#151a21">';
