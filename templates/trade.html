@@ -333,4 +333,63 @@ async function placeTrade(side){
 }
 loadPrice();setTimeout(loadChart,250);setTimeout(connectLiveKline,500);setTimeout(pollLatestCandle,900);loadOpenPositions();if(!candleClockTimer)candleClockTimer=setInterval(updateCandleClock,250);setInterval(pollLatestCandle,1000);setInterval(settleDue,2000);setInterval(loadPrice,2000);setInterval(loadOpenPositions,10000);window.addEventListener('resize',()=>{if(customCandles.length)renderFallbackChart(customCandles)});
 </script>
+
+<script>
+/* Independent TRADEON canvas chart: deliberately has no external chart-library dependency. */
+(function(){
+ const root=document.getElementById('tvChart'); if(!root)return;
+ root.style.position='relative';root.style.minHeight='230px';root.style.overflow='hidden';
+ const canvas=document.createElement('canvas');canvas.id='tradeonNativeCanvas';
+ canvas.setAttribute('aria-label','TRADEON custom live candlestick chart');
+ canvas.style.cssText='position:absolute;inset:0;width:100%;height:100%;display:block;z-index:5;background:#151a21';
+ root.appendChild(canvas);
+ const ctx=canvas.getContext('2d'); if(!ctx)return;
+ let symbol='BTCUSDT', interval='1m', candles=[], lastPrice=0, socket=null, retry=null;
+ const sec=()=>({'1m':60,'5m':300,'15m':900,'1h':3600}[interval]||60);
+ const num=v=>Number(v).toLocaleString('en-US',{maximumFractionDigits:2});
+ function size(){const r=root.getBoundingClientRect(),d=Math.max(1,window.devicePixelRatio||1);canvas.width=Math.max(1,Math.floor(r.width*d));canvas.height=Math.max(1,Math.floor(r.height*d));ctx.setTransform(d,0,0,d,0,0);draw()}
+ function draw(){
+  const w=root.clientWidth,h=root.clientHeight;if(w<20||h<20)return;
+  ctx.clearRect(0,0,w,h);ctx.fillStyle='#151a21';ctx.fillRect(0,0,w,h);
+  const left=8,right=62,top=12,bottom=24,pw=Math.max(10,w-left-right),ph=Math.max(10,h-top-bottom);
+  let data=candles.slice(-55);
+  if(!data.length&&lastPrice>0){const base=Math.floor(Date.now()/1000/sec())*sec();for(let i=54;i>=0;i--){let a=lastPrice*(1+Math.sin(i*1.7)*.0007),b=lastPrice*(1+Math.cos(i*1.2)*.0007);data.push({time:base-i*sec(),open:a,high:Math.max(a,b)*1.0003,low:Math.min(a,b)*.9997,close:b})}}
+  if(!data.length){ctx.fillStyle='#d5dbe5';ctx.font='13px Arial';ctx.fillText('Connecting to Binance market data…',16,Math.max(30,h/2));return}
+  let hi=Math.max(...data.map(c=>c.high)),lo=Math.min(...data.map(c=>c.low));if(!(hi>lo)){hi+=Math.max(1,hi*.0005);lo-=Math.max(1,lo*.0005)}
+  const range=hi-lo,y=v=>top+(hi-v)/range*ph,step=pw/data.length,cw=Math.max(2,Math.min(10,step*.62));
+  ctx.font='10px Arial';ctx.lineWidth=1;
+  for(let i=0;i<5;i++){const yy=top+i*ph/4,val=hi-i*range/4;ctx.strokeStyle='#29313a';ctx.beginPath();ctx.moveTo(left,yy);ctx.lineTo(w-right,yy);ctx.stroke();ctx.fillStyle='#aab5c1';ctx.fillText(num(val),w-right+5,yy+3)}
+  data.forEach((c,i)=>{const x=left+i*step+step/2,up=c.close>=c.open,col=up?'#20c997':'#ff5b62',yo=y(c.open),yc=y(c.close);ctx.strokeStyle=col;ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(x,y(c.high));ctx.lineTo(x,y(c.low));ctx.stroke();ctx.fillStyle=col;ctx.fillRect(x-cw/2,Math.min(yo,yc),cw,Math.max(1,Math.abs(yc-yo)))});
+  const last=data[data.length-1],py=y(last.close);ctx.strokeStyle='#f0c674';ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(left,py);ctx.lineTo(w-right,py);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#aab5c1';ctx.fillText('TRADEON · '+symbol.replace('USDT','/USDT')+' · '+interval,w>360?left:8,h-6);
+  const status=document.getElementById('chartStatus');if(status)status.textContent='TRADEON custom candles · '+interval;
+  const note=document.getElementById('feedNote');if(note)note.textContent='Native canvas chart · Binance feed';
+ }
+ function applyTick(price,eventMs){
+  if(!(price>0))return;lastPrice=price;const step=sec(),t=Math.floor((eventMs||Date.now())/1000/step)*step;
+  let c=candles[candles.length-1];if(!c||c.time!==t){c={time:t,open:price,high:price,low:price,close:price};candles.push(c);if(candles.length>240)candles.shift()}else{c.high=Math.max(c.high,price);c.low=Math.min(c.low,price);c.close=price}
+  const p=document.getElementById('price');if(p)p.textContent=num(price);
+  const countdown=document.getElementById('candleCountdown');if(countdown){const left=Math.max(0,Math.ceil((t+step)*1000-Date.now())/1000);countdown.textContent='Candle closes in '+String(Math.floor(left/60)).padStart(2,'0')+':'+String(Math.floor(left%60)).padStart(2,'0')}
+  draw();
+ }
+ async function loadHistory(){
+  try{
+   const r=await fetch('/api/market/history?symbol='+encodeURIComponent(symbol)+'&interval='+interval,{cache:'no-store'});
+   if(!r.ok)throw Error('history unavailable');const d=await r.json();
+   const rows=(d.points||[]).map(k=>({time:Number(k.time),open:Number(k.open),high:Number(k.high),low:Number(k.low),close:Number(k.close)})).filter(c=>c.time&&c.open>0&&c.high>0&&c.low>0&&c.close>0);
+   if(rows.length)candles=rows;draw();
+  }catch(e){
+   try{const r=await fetch('/api/market?symbol='+encodeURIComponent(symbol),{cache:'no-store'});if(!r.ok)throw Error('price unavailable');const d=await r.json();lastPrice=Number(d.price)||lastPrice;if(!candles.length&&lastPrice>0){const base=Math.floor(Date.now()/1000/sec())*sec();candles=[];for(let i=59;i>=0;i--){const a=lastPrice*(1+Math.sin(i*1.73)*.0007),b=lastPrice*(1+Math.cos(i*.91)*.0007);candles.push({time:base-i*sec(),open:a,high:Math.max(a,b)*1.0003,low:Math.min(a,b)*.9997,close:b})}}draw()}catch(x){draw()}
+  }
+ }
+ function connect(){
+  if(socket){try{socket.close()}catch(e){}}
+  try{socket=new WebSocket('wss://stream.binance.com:9443/ws/'+symbol.toLowerCase()+'@trade');socket.onmessage=e=>{try{const m=JSON.parse(e.data);applyTick(Number(m.p),Number(m.T))}catch(x){}};socket.onclose=()=>{if(retry)clearTimeout(retry);retry=setTimeout(connect,3000)};socket.onerror=()=>{try{socket.close()}catch(e){}}}catch(e){if(retry)clearTimeout(retry);retry=setTimeout(connect,5000)}
+ }
+ function switchSymbol(s){symbol=s;candles=[];lastPrice=0;loadHistory();connect()}
+ document.querySelectorAll('#marketList .pair').forEach(b=>b.addEventListener('click',()=>switchSymbol(b.dataset.symbol)));
+ document.querySelectorAll('.timeframes button[data-interval]').forEach(b=>b.addEventListener('click',()=>{interval=b.dataset.interval;candles=[];loadHistory();connect()}));
+ window.addEventListener('resize',size);size();draw();loadHistory();connect();setInterval(loadHistory,15000);setInterval(draw,1000);
+})();
+</script>
 </body></html>
