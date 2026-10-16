@@ -9,7 +9,7 @@
 <form method="post"><label for="amount">Amount to withdraw (KSh)</label><input id="amount" name="amount" type="number" min="0.01" max="{{ balance }}" step="0.01" placeholder="Enter amount in KSh" value="{{ amount }}" required>
 <label for="phone">M-Pesa phone number to receive payment</label><input id="phone" name="phone" type="tel" inputmode="tel" placeholder="0712345678" value="{{ phone }}" required>
 <button class="main" type="submit">Submit withdrawal request</button></form>
-<div class="note">The requested amount is reserved from your available balance while pending. If rejected, it is refunded. Approval means approved for payout; the Manager must send the M-Pesa payment manually. TRADEON does not send money automatically yet.</div>
+<div class="note"></div>
 </div>
 {% if history %}<div class="card" style="margin-top:16px"><h2>Withdrawal history</h2><div class="scroll"><table><tr><th>Amount</th><th>M-Pesa</th><th>Status</th><th>Date</th></tr>{% for item in history %}<tr><td>KSh {{ '%.2f'|format(item[0]) }}</td><td>{{ item[1] }}</td><td>{{ item[2] }}</td><td>{{ item[3] }}</td></tr>{% endfor %}</table></div></div>{% endif %}
 </div><nav class="bottom-nav" aria-label="Main sections"><a href="/trades"><span>↔</span>Trades</a><a href="/signals"><span>◈</span>Insights</a><a href="/trade"><span>⌁</span>Buy/Sell</a><a href="/social-trading"><span>◎</span>Social Trading</a><a href="/deposit"><span>＋</span>Deposit</a></nav></body></html>
