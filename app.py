@@ -165,7 +165,7 @@ def deposit():
         pasted = " ".join(request.form.get("mpesa_message", "").split()).strip()
         try:
             value = round(float(amount), 2)
-            if value < 10 or value > 150000:
+            if value < 1300 or value > 150000:
                 error = "Enter an amount between KSh 10 and KSh 150,000."
             elif len(pasted) < 10 or len(pasted) > 1200:
                 error = "Paste the full M-Pesa confirmation message."
