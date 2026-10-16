@@ -1,6 +1,13 @@
 <!doctype html>
 <html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>TradeOn Manager</title>
-<style>body{font-family:Arial;background:#f4f6f8;margin:0;color:#111}.top{background:#111;color:#fff;padding:18px;display:flex;justify-content:space-between}.top a{color:#fff}.wrap{padding:18px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}.card{background:#fff;padding:18px;border-radius:12px}.num{font-size:25px;font-weight:bold}table{width:100%;border-collapse:collapse;background:#fff;margin-top:18px}th,td{padding:10px;border-bottom:1px solid #eee;text-align:left;font-size:13px}.ok{color:green}.pending{color:#b36b00}.failed{color:#b00020}</style></head>
+<style>body{font-family:Arial;background:#f4f6f8;margin:0;color:#111}.top{background:#111;color:#fff;padding:18px;display:flex;justify-content:space-between}.top a{color:#fff}.wrap{padding:18px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}.card{background:#fff;padding:18px;border-radius:12px}.num{font-size:25px;font-weight:bold}table{width:100%;border-collapse:collapse;background:#fff;margin-top:18px}th,td{padding:10px;border-bottom:1px solid #eee;text-align:left;font-size:13px}.ok{color:green}.pending{color:#b36b00}.failed{color:#b00020}</style><style id="tradeon-sitewide-background">
+html,body{min-height:100%;background:#030712!important}
+body{background-image:url('/static/tradeon-background.svg')!important;background-repeat:no-repeat!important;background-position:center center!important;background-size:cover!important;background-attachment:fixed!important}
+body:before{content:none!important}
+header,.top,.navbar,nav{background:rgba(3,10,22,.78)!important;backdrop-filter:blur(16px);border-color:rgba(41,220,166,.32)!important}
+.card,.panel,form,.content,.box,.wrap .card,.below-actions,.open-positions,main,.container{background-color:rgba(6,17,31,.72);border-color:rgba(74,157,192,.34)}
+</style>
+</head>
 <body><div class="top"><b>TRADEON MANAGER</b><a href="/manager/logout">Logout</a></div>
 <div class="wrap"><h2>Dashboard</h2><div class="cards">
 <div class="card"><div>Users</div><div class="num">{{ users }}</div></div>
