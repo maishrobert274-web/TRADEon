@@ -973,13 +973,20 @@ def profile():
     error = None
     if request.method == "POST":
         name = request.form.get("name", "").strip()
+        phone_input = request.form.get("phone", "").strip()
+        phone = normalize_phone(phone_input) if phone_input else None
         if not name or len(name) > 80:
             error = "Enter a name between 1 and 80 characters."
+        elif phone and (not phone.startswith("+") or not 8 <= len("".join(ch for ch in phone if ch.isdigit())) <= 15):
+            error = "Enter a valid phone number with its country code, for example +254712345678."
         else:
-            with sqlite3.connect(DB) as con:
-                con.execute("UPDATE users SET name=? WHERE id=?", (name, session["user_id"]))
-            session["user_name"] = name
-            message = "Profile updated."
+            try:
+                with sqlite3.connect(DB) as con:
+                    con.execute("UPDATE users SET name=?,phone=? WHERE id=?", (name, phone, session["user_id"]))
+                session["user_name"] = name
+                message = "Profile updated."
+            except sqlite3.IntegrityError:
+                error = "That phone number is already linked to another account."
     with sqlite3.connect(DB) as con:
         user = con.execute("SELECT name,phone,country,email FROM users WHERE id=?", (session["user_id"],)).fetchone()
     # A browser may retain an old login cookie after the server database changes.
