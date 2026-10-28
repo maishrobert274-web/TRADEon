@@ -14,14 +14,20 @@ def init_db():
         con.execute("""CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            phone TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL
+            phone TEXT UNIQUE,
+            password TEXT NOT NULL,
+            email TEXT UNIQUE,
+            email_verified INTEGER NOT NULL DEFAULT 0
         )""")
         cols = [r[1] for r in con.execute("PRAGMA table_info(users)").fetchall()]
         if "verified" not in cols:
             con.execute("ALTER TABLE users ADD COLUMN verified INTEGER NOT NULL DEFAULT 0")
         if "country" not in cols:
             con.execute("ALTER TABLE users ADD COLUMN country TEXT NOT NULL DEFAULT 'Kenya'")
+        if "email" not in cols:
+            con.execute("ALTER TABLE users ADD COLUMN email TEXT")
+        if "email_verified" not in cols:
+            con.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0")
         con.execute("""CREATE TABLE IF NOT EXISTS deposits (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, amount REAL NOT NULL, phone TEXT NOT NULL, merchant_request_id TEXT, checkout_request_id TEXT UNIQUE, mpesa_receipt TEXT, status TEXT NOT NULL DEFAULT "PENDING", created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
         deposit_cols = [r[1] for r in con.execute("PRAGMA table_info(deposits)").fetchall()]
         if "mpesa_message" not in deposit_cols:
@@ -59,6 +65,45 @@ def init_manager_wallet_controls():
 
 init_manager_wallet_controls()
 
+def migrate_users_phone_nullable():
+    """Allow email-only accounts while preserving every existing user ID and field."""
+    with sqlite3.connect(DB) as con:
+        info = con.execute("PRAGMA table_info(users)").fetchall()
+        phone_info = next((row for row in info if row[1] == "phone"), None)
+        cols = {row[1] for row in info}
+        if not phone_info or phone_info[3] == 0:
+            con.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique ON users(email)")
+            return
+        con.execute("PRAGMA foreign_keys=OFF")
+        con.execute("DROP TABLE IF EXISTS users_new")
+        con.execute("""CREATE TABLE users_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            phone TEXT UNIQUE,
+            password TEXT NOT NULL,
+            verified INTEGER NOT NULL DEFAULT 0,
+            country TEXT NOT NULL DEFAULT 'Kenya',
+            blocked INTEGER NOT NULL DEFAULT 0,
+            block_reason TEXT,
+            email TEXT,
+            email_verified INTEGER NOT NULL DEFAULT 0
+        )""")
+        email_expr = "email" if "email" in cols else "NULL"
+        email_verified_expr = "email_verified" if "email_verified" in cols else "0"
+        blocked_expr = "blocked" if "blocked" in cols else "0"
+        block_reason_expr = "block_reason" if "block_reason" in cols else "NULL"
+        verified_expr = "verified" if "verified" in cols else "0"
+        country_expr = "country" if "country" in cols else "'Kenya'"
+        con.execute(f"""INSERT INTO users_new
+            (id,name,phone,password,verified,country,blocked,block_reason,email,email_verified)
+            SELECT id,name,phone,password,{verified_expr},{country_expr},{blocked_expr},
+                   {block_reason_expr},{email_expr},{email_verified_expr} FROM users""")
+        con.execute("DROP TABLE users")
+        con.execute("ALTER TABLE users_new RENAME TO users")
+        con.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique ON users(email)")
+
+migrate_users_phone_nullable()
+
 def normalize_phone(phone):
     p = phone.strip().replace(" ", "").replace("-", "")
     if p.startswith("07") or p.startswith("01"):
@@ -80,47 +125,49 @@ def register():
     error = None
     if request.method == "POST":
         name = request.form.get("name", "").strip()
-        phone = normalize_phone(request.form.get("phone", ""))
+        email = request.form.get("email", "").strip().lower()
         country = request.form.get("country", "").strip()
         password = request.form.get("password", "")
         allowed_countries = {"Kenya", "Uganda", "Tanzania", "Rwanda", "Nigeria", "Ghana", "South Africa", "United States", "United Kingdom", "Canada", "Australia", "India", "Pakistan", "Bangladesh", "Philippines", "Indonesia", "Malaysia", "Singapore", "United Arab Emirates", "Saudi Arabia", "Germany", "France", "Italy", "Spain", "Netherlands", "Brazil", "Mexico", "Japan", "South Korea", "Turkey", "Egypt", "Other"}
-        if not name or not phone or not country or len(password) < 6:
-            error = "Enter your name, country, international phone number and a password of at least 6 characters."
+        if not name or not email or not country or len(password) < 6:
+            error = "Enter your name, email address, country and a password of at least 6 characters."
+        elif not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+            error = "Enter a valid email address."
         elif country not in allowed_countries:
             error = "Please choose a country from the list."
-        elif not phone.startswith("+") or len("".join(ch for ch in phone if ch.isdigit())) < 8 or len("".join(ch for ch in phone if ch.isdigit())) > 15:
-            error = "Enter your phone number with its international country code, for example +254712345678."
         else:
             try:
                 with sqlite3.connect(DB) as con:
                     cur = con.execute(
-                        "INSERT INTO users (name,phone,password,verified,country) VALUES (?,?,?,0,?)",
-                        (name, phone, generate_password_hash(password), country)
+                        "INSERT INTO users (name,email,password,verified,country,email_verified) VALUES (?,?,?,1,?,0)",
+                        (name, email, generate_password_hash(password), country)
                     )
                     user_id = cur.lastrowid
-                # Phone verification is disabled for simple registration.
-                # The phone number is used as the account login identifier.
-                with sqlite3.connect(DB) as con:
-                    con.execute("UPDATE users SET verified=1 WHERE id=?", (user_id,))
                     con.execute("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)", (user_id,))
                     user = con.execute("SELECT id,name FROM users WHERE id=?", (user_id,)).fetchone()
                 session["user_id"] = user[0]
                 session["user_name"] = user[1]
                 return redirect(url_for("home"))
             except sqlite3.IntegrityError:
-                error = "That phone number is already registered."
+                error = "That email address is already registered. Try logging in instead."
     return render_template("register.html", error=error)
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
     error = None
     if request.method == "POST":
-        phone = normalize_phone(request.form.get("phone", ""))
+        identifier = (request.form.get("identifier") or request.form.get("email") or request.form.get("phone") or "").strip()
         password = request.form.get("password", "")
+        if "@" in identifier:
+            lookup = identifier.lower()
+            lookup_column = "email"
+        else:
+            lookup = normalize_phone(identifier)
+            lookup_column = "phone"
         with sqlite3.connect(DB) as con:
             user = con.execute(
-                "SELECT id,name,password,verified FROM users WHERE phone=?",
-                (phone,)
+                f"SELECT id,name,password,verified FROM users WHERE {lookup_column}=?",
+                (lookup,)
             ).fetchone()
         if user and check_password_hash(user[2], password):
             with sqlite3.connect(DB) as con:
@@ -130,7 +177,7 @@ def login():
             session["user_id"] = user[0]
             session["user_name"] = user[1]
             return redirect(url_for("home"))
-        error = "Incorrect phone number or password."
+        error = "Incorrect email/phone or password."
     return render_template("login.html", error=error)
 
 @app.route("/logout")
@@ -821,7 +868,7 @@ def wallet():
             "SELECT transaction_type,amount,balance_after,reason,created_at FROM wallet_transactions WHERE user_id=? ORDER BY id DESC LIMIT 50",
             (session["user_id"],)
         ).fetchall()
-        user = con.execute("SELECT name,phone,country FROM users WHERE id=?", (session["user_id"],)).fetchone()
+        user = con.execute("SELECT name,phone,country,email FROM users WHERE id=?", (session["user_id"],)).fetchone()
     return render_template("wallet.html", balance=balance, deposits=deposits, adjustments=adjustments, user_name=user[0] if user else "", phone=user[1] if user else "", country=user[2] if user else "Kenya")
 
 
@@ -926,21 +973,30 @@ def profile():
     error = None
     if request.method == "POST":
         name = request.form.get("name", "").strip()
+        phone_input = request.form.get("phone", "").strip()
+        phone = normalize_phone(phone_input) if phone_input else None
         if not name or len(name) > 80:
             error = "Enter a name between 1 and 80 characters."
+        elif not phone_input:
+            error = "Phone number is required in your Profile."
+        elif not phone or not phone.startswith("+") or not 8 <= len("".join(ch for ch in phone if ch.isdigit())) <= 15:
+            error = "Enter a valid phone number with its country code, for example +254712345678."
         else:
-            with sqlite3.connect(DB) as con:
-                con.execute("UPDATE users SET name=? WHERE id=?", (name, session["user_id"]))
-            session["user_name"] = name
-            message = "Profile updated."
+            try:
+                with sqlite3.connect(DB) as con:
+                    con.execute("UPDATE users SET name=?,phone=? WHERE id=?", (name, phone, session["user_id"]))
+                session["user_name"] = name
+                message = "Profile updated."
+            except sqlite3.IntegrityError:
+                error = "That phone number is already linked to another account."
     with sqlite3.connect(DB) as con:
-        user = con.execute("SELECT name,phone,country FROM users WHERE id=?", (session["user_id"],)).fetchone()
+        user = con.execute("SELECT name,phone,country,email FROM users WHERE id=?", (session["user_id"],)).fetchone()
     # A browser may retain an old login cookie after the server database changes.
     # Handle that stale session gracefully instead of raising a 500 error.
     if user is None:
         session.clear()
         return render_template("login.html", error="Your session has expired or this account is no longer available. Please log in again, or register a new account if needed."), 401
-    return render_template("profile.html", user_name=user[0] or "", phone=user[1] or "", country=user[2] or "Kenya", message=message, error=error)
+    return render_template("profile.html", user_name=user[0] or "", phone=user[1] or "", country=user[2] or "Kenya", email=user[3] or "", message=message, error=error)
 
 @app.route("/refer")
 def refer():
@@ -982,11 +1038,11 @@ def manager_users():
     with sqlite3.connect(DB) as con:
         like = "%" + q + "%"
         if q:
-            users = con.execute("""SELECT u.id,u.name,u.phone,u.verified,COALESCE(w.balance,0),(SELECT COUNT(*) FROM deposits d WHERE d.user_id=u.id),(SELECT COALESCE(SUM(d.amount),0) FROM deposits d WHERE d.user_id=u.id AND d.status='SUCCESS') FROM users u LEFT JOIN wallets w ON w.user_id=u.id WHERE u.name LIKE ? OR u.phone LIKE ? ORDER BY u.id DESC""",(like,like)).fetchall()
+            users = con.execute("""SELECT u.id,u.name,COALESCE(u.phone,u.email,''),u.verified,COALESCE(w.balance,0),(SELECT COUNT(*) FROM deposits d WHERE d.user_id=u.id),(SELECT COALESCE(SUM(d.amount),0) FROM deposits d WHERE d.user_id=u.id AND d.status='SUCCESS') FROM users u LEFT JOIN wallets w ON w.user_id=u.id WHERE u.name LIKE ? OR u.phone LIKE ? OR u.email LIKE ? ORDER BY u.id DESC""",(like,like,like)).fetchall()
         else:
-            users = con.execute("""SELECT u.id,u.name,u.phone,u.verified,COALESCE(w.balance,0),(SELECT COUNT(*) FROM deposits d WHERE d.user_id=u.id),(SELECT COALESCE(SUM(d.amount),0) FROM deposits d WHERE d.user_id=u.id AND d.status='SUCCESS') FROM users u LEFT JOIN wallets w ON w.user_id=u.id ORDER BY u.id DESC""").fetchall()
+            users = con.execute("""SELECT u.id,u.name,COALESCE(u.phone,u.email,''),u.verified,COALESCE(w.balance,0),(SELECT COUNT(*) FROM deposits d WHERE d.user_id=u.id),(SELECT COALESCE(SUM(d.amount),0) FROM deposits d WHERE d.user_id=u.id AND d.status='SUCCESS') FROM users u LEFT JOIN wallets w ON w.user_id=u.id ORDER BY u.id DESC""").fetchall()
     rows="".join(f"<tr><td>{u[0]}</td><td>{u[1]}</td><td>{u[2]}</td><td>{'Verified' if u[3] else 'Unverified'}</td><td>KSh {u[4]:,.2f}</td><td>{u[5]}</td><td>KSh {u[6]:,.2f}</td><td><a href='/manager/users/{u[0]}'>View</a></td></tr>" for u in users)
-    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Users</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa}}header{{background:#111;color:white;padding:18px 5%}}main{{padding:24px 5%}}input,button{{padding:12px;border-radius:8px;border:1px solid #ccc}}button{{background:#111;color:white}}.wrap{{overflow:auto}}table{{width:100%;min-width:800px;border-collapse:collapse;background:white}}th,td{{padding:10px;border-bottom:1px solid #eee;text-align:left;font-size:13px}}a{{background:#111;color:white;padding:7px 10px;border-radius:7px;text-decoration:none}}</style></head><body><header><b>TRADEON MANAGER — USERS</b> &nbsp; <a href="/manager">Dashboard</a></header><main><h2>Users Management</h2><form method="get"><input name="q" value="{q}" placeholder="Search name or phone"><button>Search</button></form><p>{len(users)} user(s) found.</p><div class="wrap"><table><tr><th>ID</th><th>Name</th><th>Phone</th><th>Verification</th><th>Wallet</th><th>Deposits</th><th>Total deposited</th><th>Action</th></tr>{rows or "<tr><td colspan='8'>No users found.</td></tr>"}</table></div></main></body></html>"""
+    return f"""<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Users</title><style>body{{font-family:Arial;margin:0;background:#f5f7fa}}header{{background:#111;color:white;padding:18px 5%}}main{{padding:24px 5%}}input,button{{padding:12px;border-radius:8px;border:1px solid #ccc}}button{{background:#111;color:white}}.wrap{{overflow:auto}}table{{width:100%;min-width:800px;border-collapse:collapse;background:white}}th,td{{padding:10px;border-bottom:1px solid #eee;text-align:left;font-size:13px}}a{{background:#111;color:white;padding:7px 10px;border-radius:7px;text-decoration:none}}</style></head><body><header><b>TRADEON MANAGER — USERS</b> &nbsp; <a href="/manager">Dashboard</a></header><main><h2>Users Management</h2><form method="get"><input name="q" value="{q}" placeholder="Search name, email or phone"><button>Search</button></form><p>{len(users)} user(s) found.</p><div class="wrap"><table><tr><th>ID</th><th>Name</th><th>Email / Phone</th><th>Verification</th><th>Wallet</th><th>Deposits</th><th>Total deposited</th><th>Action</th></tr>{rows or "<tr><td colspan='8'>No users found.</td></tr>"}</table></div></main></body></html>"""
 
 @app.route("/manager/users/<int:user_id>")
 def manager_user_detail(user_id):
@@ -1177,9 +1233,9 @@ def manager_wallets():
     q = request.args.get("q", "").strip()
     with sqlite3.connect(DB) as con:
         like = "%" + q + "%"
-        users = con.execute("""SELECT u.id,u.name,u.phone,COALESCE(w.balance,0),COALESCE(u.blocked,0),COALESCE(u.block_reason,'')
+        users = con.execute("""SELECT u.id,u.name,COALESCE(u.phone,u.email,'Not added'),COALESCE(w.balance,0),COALESCE(u.blocked,0),COALESCE(u.block_reason,'')
                                FROM users u LEFT JOIN wallets w ON w.user_id=u.id
-                               WHERE u.name LIKE ? OR u.phone LIKE ? ORDER BY u.id DESC""", (like,like)).fetchall()
+                               WHERE u.name LIKE ? OR u.phone LIKE ? OR u.email LIKE ? ORDER BY u.id DESC""", (like,like,like)).fetchall()
         txns = con.execute("""SELECT t.id,u.name,t.transaction_type,t.amount,t.balance_after,t.reason,t.admin_username,t.created_at
                               FROM wallet_transactions t JOIN users u ON u.id=t.user_id
                               ORDER BY t.id DESC LIMIT 100""").fetchall()
@@ -1209,8 +1265,8 @@ def manager_wallets():
     input,select,button{padding:8px;margin:3px;max-width:150px}button{background:#111;color:white}
     .msg{background:#e6f4ea;padding:10px}</style></head><body><header><b>TRADEON MANAGER — WALLETS & ACCESS</b>
     &nbsp; <a style="color:white" href="/manager">Dashboard</a></header><main><h2>User balances and account access</h2>
-    <p class="msg">__MESSAGE__</p><form method="get"><input name="q" value="__QUERY__" placeholder="Search name or phone"><button>Search</button></form>
-    <div class="wrap"><table><tr><th>ID</th><th>Name</th><th>Phone</th><th>Real balance</th><th>Status</th><th>Block reason</th><th>Manager action</th></tr>
+    <p class="msg">__MESSAGE__</p><form method="get"><input name="q" value="__QUERY__" placeholder="Search name, email or phone"><button>Search</button></form>
+    <div class="wrap"><table><tr><th>ID</th><th>Name</th><th>Email / Phone</th><th>Real balance</th><th>Status</th><th>Block reason</th><th>Manager action</th></tr>
     __USER_ROWS__
     </table></div><h2>Recent manual balance transactions</h2><div class="wrap"><table><tr><th>ID</th><th>User</th><th>Type</th><th>Amount</th><th>Balance after</th><th>Reason</th><th>Manager</th><th>Date</th></tr>
     __TXN_ROWS__
