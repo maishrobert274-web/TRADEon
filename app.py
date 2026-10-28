@@ -131,7 +131,7 @@ def register():
         allowed_countries = {"Kenya", "Uganda", "Tanzania", "Rwanda", "Nigeria", "Ghana", "South Africa", "United States", "United Kingdom", "Canada", "Australia", "India", "Pakistan", "Bangladesh", "Philippines", "Indonesia", "Malaysia", "Singapore", "United Arab Emirates", "Saudi Arabia", "Germany", "France", "Italy", "Spain", "Netherlands", "Brazil", "Mexico", "Japan", "South Korea", "Turkey", "Egypt", "Other"}
         if not name or not email or not country or len(password) < 6:
             error = "Enter your name, email address, country and a password of at least 6 characters."
-        elif not re.fullmatch(r"[^\\s@]+@[^\\s@]+\\.[^\\s@]+", email):
+        elif not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
             error = "Enter a valid email address."
         elif country not in allowed_countries:
             error = "Please choose a country from the list."
