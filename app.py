@@ -1231,9 +1231,9 @@ def manager_wallets():
     q = request.args.get("q", "").strip()
     with sqlite3.connect(DB) as con:
         like = "%" + q + "%"
-        users = con.execute("""SELECT u.id,u.name,u.phone,COALESCE(w.balance,0),COALESCE(u.blocked,0),COALESCE(u.block_reason,'')
+        users = con.execute("""SELECT u.id,u.name,COALESCE(u.phone,u.email,'Not added'),COALESCE(w.balance,0),COALESCE(u.blocked,0),COALESCE(u.block_reason,'')
                                FROM users u LEFT JOIN wallets w ON w.user_id=u.id
-                               WHERE u.name LIKE ? OR u.phone LIKE ? ORDER BY u.id DESC""", (like,like)).fetchall()
+                               WHERE u.name LIKE ? OR u.phone LIKE ? OR u.email LIKE ? ORDER BY u.id DESC""", (like,like,like)).fetchall()
         txns = con.execute("""SELECT t.id,u.name,t.transaction_type,t.amount,t.balance_after,t.reason,t.admin_username,t.created_at
                               FROM wallet_transactions t JOIN users u ON u.id=t.user_id
                               ORDER BY t.id DESC LIMIT 100""").fetchall()
@@ -1263,8 +1263,8 @@ def manager_wallets():
     input,select,button{padding:8px;margin:3px;max-width:150px}button{background:#111;color:white}
     .msg{background:#e6f4ea;padding:10px}</style></head><body><header><b>TRADEON MANAGER — WALLETS & ACCESS</b>
     &nbsp; <a style="color:white" href="/manager">Dashboard</a></header><main><h2>User balances and account access</h2>
-    <p class="msg">__MESSAGE__</p><form method="get"><input name="q" value="__QUERY__" placeholder="Search name or phone"><button>Search</button></form>
-    <div class="wrap"><table><tr><th>ID</th><th>Name</th><th>Phone</th><th>Real balance</th><th>Status</th><th>Block reason</th><th>Manager action</th></tr>
+    <p class="msg">__MESSAGE__</p><form method="get"><input name="q" value="__QUERY__" placeholder="Search name, email or phone"><button>Search</button></form>
+    <div class="wrap"><table><tr><th>ID</th><th>Name</th><th>Email / Phone</th><th>Real balance</th><th>Status</th><th>Block reason</th><th>Manager action</th></tr>
     __USER_ROWS__
     </table></div><h2>Recent manual balance transactions</h2><div class="wrap"><table><tr><th>ID</th><th>User</th><th>Type</th><th>Amount</th><th>Balance after</th><th>Reason</th><th>Manager</th><th>Date</th></tr>
     __TXN_ROWS__
