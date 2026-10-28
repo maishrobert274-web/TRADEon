@@ -977,7 +977,9 @@ def profile():
         phone = normalize_phone(phone_input) if phone_input else None
         if not name or len(name) > 80:
             error = "Enter a name between 1 and 80 characters."
-        elif phone and (not phone.startswith("+") or not 8 <= len("".join(ch for ch in phone if ch.isdigit())) <= 15):
+        elif not phone_input:
+            error = "Phone number is required in your Profile."
+        elif not phone or not phone.startswith("+") or not 8 <= len("".join(ch for ch in phone if ch.isdigit())) <= 15:
             error = "Enter a valid phone number with its country code, for example +254712345678."
         else:
             try:
