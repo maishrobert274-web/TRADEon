@@ -981,7 +981,7 @@ def profile():
             session["user_name"] = name
             message = "Profile updated."
     with sqlite3.connect(DB) as con:
-        user = con.execute("SELECT name,phone,country FROM users WHERE id=?", (session["user_id"],)).fetchone()
+        user = con.execute("SELECT name,phone,country,email FROM users WHERE id=?", (session["user_id"],)).fetchone()
     # A browser may retain an old login cookie after the server database changes.
     # Handle that stale session gracefully instead of raising a 500 error.
     if user is None:
