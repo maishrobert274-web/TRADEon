@@ -14,14 +14,20 @@ def init_db():
         con.execute("""CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            phone TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL
+            phone TEXT UNIQUE,
+            password TEXT NOT NULL,
+            email TEXT UNIQUE,
+            email_verified INTEGER NOT NULL DEFAULT 0
         )""")
         cols = [r[1] for r in con.execute("PRAGMA table_info(users)").fetchall()]
         if "verified" not in cols:
             con.execute("ALTER TABLE users ADD COLUMN verified INTEGER NOT NULL DEFAULT 0")
         if "country" not in cols:
             con.execute("ALTER TABLE users ADD COLUMN country TEXT NOT NULL DEFAULT 'Kenya'")
+        if "email" not in cols:
+            con.execute("ALTER TABLE users ADD COLUMN email TEXT")
+        if "email_verified" not in cols:
+            con.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0")
         con.execute("""CREATE TABLE IF NOT EXISTS deposits (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, amount REAL NOT NULL, phone TEXT NOT NULL, merchant_request_id TEXT, checkout_request_id TEXT UNIQUE, mpesa_receipt TEXT, status TEXT NOT NULL DEFAULT "PENDING", created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
         deposit_cols = [r[1] for r in con.execute("PRAGMA table_info(deposits)").fetchall()]
         if "mpesa_message" not in deposit_cols:
@@ -59,6 +65,45 @@ def init_manager_wallet_controls():
 
 init_manager_wallet_controls()
 
+def migrate_users_phone_nullable():
+    """Allow email-only accounts while preserving every existing user ID and field."""
+    with sqlite3.connect(DB) as con:
+        info = con.execute("PRAGMA table_info(users)").fetchall()
+        phone_info = next((row for row in info if row[1] == "phone"), None)
+        cols = {row[1] for row in info}
+        if not phone_info or phone_info[3] == 0:
+            con.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique ON users(email)")
+            return
+        con.execute("PRAGMA foreign_keys=OFF")
+        con.execute("DROP TABLE IF EXISTS users_new")
+        con.execute("""CREATE TABLE users_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            phone TEXT UNIQUE,
+            password TEXT NOT NULL,
+            verified INTEGER NOT NULL DEFAULT 0,
+            country TEXT NOT NULL DEFAULT 'Kenya',
+            blocked INTEGER NOT NULL DEFAULT 0,
+            block_reason TEXT,
+            email TEXT,
+            email_verified INTEGER NOT NULL DEFAULT 0
+        )""")
+        email_expr = "email" if "email" in cols else "NULL"
+        email_verified_expr = "email_verified" if "email_verified" in cols else "0"
+        blocked_expr = "blocked" if "blocked" in cols else "0"
+        block_reason_expr = "block_reason" if "block_reason" in cols else "NULL"
+        verified_expr = "verified" if "verified" in cols else "0"
+        country_expr = "country" if "country" in cols else "'Kenya'"
+        con.execute(f"""INSERT INTO users_new
+            (id,name,phone,password,verified,country,blocked,block_reason,email,email_verified)
+            SELECT id,name,phone,password,{verified_expr},{country_expr},{blocked_expr},
+                   {block_reason_expr},{email_expr},{email_verified_expr} FROM users""")
+        con.execute("DROP TABLE users")
+        con.execute("ALTER TABLE users_new RENAME TO users")
+        con.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique ON users(email)")
+
+migrate_users_phone_nullable()
+
 def normalize_phone(phone):
     p = phone.strip().replace(" ", "").replace("-", "")
     if p.startswith("07") or p.startswith("01"):
@@ -80,47 +125,49 @@ def register():
     error = None
     if request.method == "POST":
         name = request.form.get("name", "").strip()
-        phone = normalize_phone(request.form.get("phone", ""))
+        email = request.form.get("email", "").strip().lower()
         country = request.form.get("country", "").strip()
         password = request.form.get("password", "")
         allowed_countries = {"Kenya", "Uganda", "Tanzania", "Rwanda", "Nigeria", "Ghana", "South Africa", "United States", "United Kingdom", "Canada", "Australia", "India", "Pakistan", "Bangladesh", "Philippines", "Indonesia", "Malaysia", "Singapore", "United Arab Emirates", "Saudi Arabia", "Germany", "France", "Italy", "Spain", "Netherlands", "Brazil", "Mexico", "Japan", "South Korea", "Turkey", "Egypt", "Other"}
-        if not name or not phone or not country or len(password) < 6:
-            error = "Enter your name, country, international phone number and a password of at least 6 characters."
+        if not name or not email or not country or len(password) < 6:
+            error = "Enter your name, email address, country and a password of at least 6 characters."
+        elif not re.fullmatch(r"[^\\s@]+@[^\\s@]+\\.[^\\s@]+", email):
+            error = "Enter a valid email address."
         elif country not in allowed_countries:
             error = "Please choose a country from the list."
-        elif not phone.startswith("+") or len("".join(ch for ch in phone if ch.isdigit())) < 8 or len("".join(ch for ch in phone if ch.isdigit())) > 15:
-            error = "Enter your phone number with its international country code, for example +254712345678."
         else:
             try:
                 with sqlite3.connect(DB) as con:
                     cur = con.execute(
-                        "INSERT INTO users (name,phone,password,verified,country) VALUES (?,?,?,0,?)",
-                        (name, phone, generate_password_hash(password), country)
+                        "INSERT INTO users (name,email,password,verified,country,email_verified) VALUES (?,?,?,1,?,0)",
+                        (name, email, generate_password_hash(password), country)
                     )
                     user_id = cur.lastrowid
-                # Phone verification is disabled for simple registration.
-                # The phone number is used as the account login identifier.
-                with sqlite3.connect(DB) as con:
-                    con.execute("UPDATE users SET verified=1 WHERE id=?", (user_id,))
                     con.execute("INSERT OR IGNORE INTO wallets (user_id,balance) VALUES (?,0)", (user_id,))
                     user = con.execute("SELECT id,name FROM users WHERE id=?", (user_id,)).fetchone()
                 session["user_id"] = user[0]
                 session["user_name"] = user[1]
                 return redirect(url_for("home"))
             except sqlite3.IntegrityError:
-                error = "That phone number is already registered."
+                error = "That email address is already registered. Try logging in instead."
     return render_template("register.html", error=error)
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
     error = None
     if request.method == "POST":
-        phone = normalize_phone(request.form.get("phone", ""))
+        identifier = (request.form.get("identifier") or request.form.get("email") or request.form.get("phone") or "").strip()
         password = request.form.get("password", "")
+        if "@" in identifier:
+            lookup = identifier.lower()
+            lookup_column = "email"
+        else:
+            lookup = normalize_phone(identifier)
+            lookup_column = "phone"
         with sqlite3.connect(DB) as con:
             user = con.execute(
-                "SELECT id,name,password,verified FROM users WHERE phone=?",
-                (phone,)
+                f"SELECT id,name,password,verified FROM users WHERE {lookup_column}=?",
+                (lookup,)
             ).fetchone()
         if user and check_password_hash(user[2], password):
             with sqlite3.connect(DB) as con:
@@ -130,7 +177,7 @@ def login():
             session["user_id"] = user[0]
             session["user_name"] = user[1]
             return redirect(url_for("home"))
-        error = "Incorrect phone number or password."
+        error = "Incorrect email/phone or password."
     return render_template("login.html", error=error)
 
 @app.route("/logout")
@@ -821,7 +868,7 @@ def wallet():
             "SELECT transaction_type,amount,balance_after,reason,created_at FROM wallet_transactions WHERE user_id=? ORDER BY id DESC LIMIT 50",
             (session["user_id"],)
         ).fetchall()
-        user = con.execute("SELECT name,phone,country FROM users WHERE id=?", (session["user_id"],)).fetchone()
+        user = con.execute("SELECT name,phone,country,email FROM users WHERE id=?", (session["user_id"],)).fetchone()
     return render_template("wallet.html", balance=balance, deposits=deposits, adjustments=adjustments, user_name=user[0] if user else "", phone=user[1] if user else "", country=user[2] if user else "Kenya")
 
 
@@ -940,7 +987,7 @@ def profile():
     if user is None:
         session.clear()
         return render_template("login.html", error="Your session has expired or this account is no longer available. Please log in again, or register a new account if needed."), 401
-    return render_template("profile.html", user_name=user[0] or "", phone=user[1] or "", country=user[2] or "Kenya", message=message, error=error)
+    return render_template("profile.html", user_name=user[0] or "", phone=user[1] or "", country=user[2] or "Kenya", email=user[3] or "", message=message, error=error)
 
 @app.route("/refer")
 def refer():
