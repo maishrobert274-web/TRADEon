@@ -77,6 +77,26 @@ class EmailLoginMigrationTests(unittest.TestCase):
         self.assertEqual(row[1], "new.user@example.com")
         self.assertEqual(row[2], 0)
 
+    def test_user_can_add_phone_in_profile_later(self):
+        self.client.post("/register", data={
+            "name": "Profile Phone User",
+            "email": "profile.phone@example.com",
+            "country": "Kenya",
+            "password": "email-pass-123"
+        })
+        response = self.client.post("/profile", data={
+            "name": "Profile Phone User",
+            "phone": "0712345678"
+        })
+        self.assertEqual(response.status_code, 200)
+        with sqlite3.connect(self.db_path) as con:
+            phone = con.execute(
+                "SELECT phone FROM users WHERE email=?",
+                ("profile.phone@example.com",)
+            ).fetchone()[0]
+        self.assertEqual(phone, "+254712345678")
+        self.assertIn(b"+254712345678", response.data)
+
     def test_duplicate_email_is_rejected(self):
         data = {
             "name": "First User", "email": "same@example.com",
